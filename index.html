@@ -1,0 +1,1054 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tribulator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0e14;
+    --surface: #111820;
+    --border: #1e2a38;
+    --accent: #0ea5e9;
+    --accent-dim: rgba(14,165,233,0.12);
+    --green: #10b981;
+    --green-dim: rgba(16,185,129,0.12);
+    --red: #ef4444;
+    --red-dim: rgba(239,68,68,0.1);
+    --text: #e2e8f0;
+    --muted: #64748b;
+    --mono: 'IBM Plex Mono', monospace;
+    --sans: 'DM Sans', sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 0 0 48px 0;
+  }
+
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(14,165,233,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(14,165,233,0.03) 1px, transparent 1px);
+    background-size: 32px 32px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .app-header {
+    width: 100%;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 20px 24px 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    position: relative;
+    z-index: 1;
+  }
+
+  .logo {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.2em;
+    color: var(--accent);
+    text-transform: uppercase;
+    margin-bottom: 4px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .logo::before {
+    content: '';
+    display: block;
+    width: 6px;
+    height: 6px;
+    background: var(--accent);
+    border-radius: 50%;
+    animation: pulse 2s ease-in-out infinite;
+  }
+
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+  .app-title {
+    font-size: 24px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    color: var(--text);
+    margin-bottom: 20px;
+  }
+
+  .tabs {
+    display: flex;
+    width: 100%;
+    max-width: 760px;
+  }
+
+  .tab {
+    flex: 1;
+    padding: 10px 20px;
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-align: center;
+  }
+
+  .tab:hover { color: var(--text); }
+  .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+  .content {
+    width: 100%;
+    max-width: 760px;
+    padding: 32px 24px;
+    position: relative;
+    z-index: 1;
+  }
+
+  .panel { display: none; }
+  .panel.active { display: block; }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 28px;
+    margin-bottom: 20px;
+  }
+
+  .card-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.15em;
+    color: var(--accent);
+    text-transform: uppercase;
+    margin-bottom: 16px;
+  }
+
+  .search-wrap { position: relative; margin-bottom: 16px; }
+
+  .search-input {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 16px 14px 44px;
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 14px;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+
+  .search-input:focus { border-color: var(--accent); }
+  .search-input::placeholder { color: var(--muted); }
+
+  .search-icon {
+    position: absolute;
+    left: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--muted);
+    font-size: 16px;
+    pointer-events: none;
+  }
+
+  .btn {
+    width: 100%;
+    padding: 14px;
+    border-radius: 10px;
+    border: none;
+    font-family: var(--sans);
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+  }
+
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-primary:hover { background: #38bdf8; transform: translateY(-1px); }
+  .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+
+  .btn-green { background: var(--green); color: #fff; }
+  .btn-green:hover { background: #34d399; transform: translateY(-1px); }
+  .btn-green:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+
+  .btn-outline {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    font-size: 13px;
+    padding: 10px;
+  }
+
+  .btn-outline:hover { border-color: var(--accent); color: var(--accent); }
+
+  .msg {
+    border-radius: 10px;
+    padding: 12px 16px;
+    font-size: 13px;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .msg-error { background: var(--red-dim); border: 1px solid rgba(239,68,68,0.2); color: #fca5a5; }
+  .msg-success { background: var(--green-dim); border: 1px solid rgba(16,185,129,0.2); color: #6ee7b7; }
+  .msg-info { background: var(--accent-dim); border: 1px solid rgba(14,165,233,0.2); color: #7dd3fc; }
+
+  .paper-found {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 16px;
+    animation: fadeIn 0.3s ease;
+  }
+
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+
+  .paper-title { font-size: 15px; font-weight: 600; color: var(--text); line-height: 1.5; margin-bottom: 8px; }
+  .paper-meta { font-size: 12px; color: var(--muted); font-style: italic; margin-bottom: 12px; }
+  .paper-ref { font-family: var(--mono); font-size: 11px; color: var(--muted); background: var(--surface); border-radius: 6px; padding: 8px 12px; line-height: 1.6; }
+
+  .quartile-badge {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 500;
+    padding: 2px 8px;
+    border-radius: 4px;
+    margin-left: 8px;
+    vertical-align: middle;
+  }
+
+  .q1 { background: rgba(16,185,129,0.15); color: #6ee7b7; }
+  .q2 { background: rgba(14,165,233,0.15); color: #7dd3fc; }
+  .q3 { background: rgba(245,158,11,0.15); color: #fcd34d; }
+  .q4 { background: rgba(239,68,68,0.15); color: #fca5a5; }
+
+  .abstract-text {
+    font-size: 13px;
+    color: var(--muted);
+    line-height: 1.7;
+    max-height: 120px;
+    overflow: hidden;
+    transition: max-height 0.4s ease;
+  }
+
+  .abstract-text.expanded { max-height: 2000px; }
+
+  .abstract-toggle {
+    background: none;
+    border: none;
+    color: var(--accent);
+    font-size: 12px;
+    cursor: pointer;
+    padding: 4px 0;
+    font-family: var(--mono);
+  }
+
+  .summary-section { margin-top: 20px; }
+  .field-group { margin-bottom: 16px; }
+
+  .field-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--muted);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+
+  .field-value {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 14px;
+    font-size: 13px;
+    color: var(--text);
+    line-height: 1.6;
+    width: 100%;
+    font-family: var(--sans);
+    resize: vertical;
+    outline: none;
+    transition: border-color 0.2s;
+    min-height: 44px;
+  }
+
+  .field-value:focus { border-color: var(--accent); }
+
+  .categories-wrap { display: flex; flex-wrap: wrap; gap: 6px; }
+
+  .cat-tag {
+    font-family: var(--mono);
+    font-size: 10px;
+    padding: 4px 10px;
+    border-radius: 20px;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    background: transparent;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .cat-tag.selected {
+    background: var(--accent-dim);
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  .tips {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+  }
+
+  .tips-title {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--muted);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    margin-bottom: 12px;
+  }
+
+  .tip { font-size: 12px; color: var(--muted); line-height: 2; display: flex; align-items: baseline; gap: 8px; }
+  .tip::before { content: '→'; color: var(--accent); font-family: var(--mono); flex-shrink: 0; }
+
+  .spinner {
+    width: 16px;
+    height: 16px;
+    border: 2px solid rgba(255,255,255,0.3);
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    flex-shrink: 0;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .divider { border: none; border-top: 1px solid var(--border); margin: 20px 0; }
+
+  .pubmed-link {
+    color: var(--accent);
+    font-size: 12px;
+    font-family: var(--mono);
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    margin-top: 8px;
+  }
+
+  .pubmed-link:hover { text-decoration: underline; }
+
+  .papers-toolbar {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    margin-bottom: 16px;
+  }
+
+  .papers-toolbar .search-wrap { flex: 1; margin-bottom: 0; }
+
+  .load-btn {
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: 10px;
+    padding: 14px 20px;
+    font-family: var(--sans);
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .load-btn:hover { background: #38bdf8; }
+  .load-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  .papers-count {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--muted);
+    margin-bottom: 12px;
+  }
+
+  .col-header {
+    display: grid;
+    grid-template-columns: 60px 1fr 150px 40px;
+    padding: 0 16px 8px;
+    gap: 12px;
+  }
+
+  .col-header span {
+    font-family: var(--mono);
+    font-size: 9px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  .paper-row {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    margin-bottom: 6px;
+    cursor: pointer;
+    transition: border-color 0.15s;
+    overflow: hidden;
+  }
+
+  .paper-row:hover { border-color: rgba(14,165,233,0.4); }
+  .paper-row.expanded { border-color: var(--accent); }
+
+  .paper-row-collapsed {
+    display: grid;
+    grid-template-columns: 60px 1fr 150px 40px;
+    align-items: center;
+    padding: 10px 16px;
+    gap: 12px;
+  }
+
+  .row-year { font-family: var(--mono); font-size: 11px; color: var(--muted); white-space: nowrap; }
+
+  .row-title {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .row-subject { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-style: italic; }
+  .row-chevron { font-size: 9px; color: var(--muted); text-align: right; transition: transform 0.2s; }
+  .paper-row.expanded .row-chevron { transform: rotate(180deg); }
+
+  .paper-row-expanded { display: none; padding: 0 16px 16px; border-top: 1px solid var(--border); }
+  .paper-row.expanded .paper-row-expanded { display: block; }
+
+  .expanded-title { font-size: 14px; font-weight: 600; color: var(--text); line-height: 1.5; margin-bottom: 4px; padding-top: 14px; }
+  .expanded-meta { font-family: var(--mono); font-size: 11px; color: var(--muted); margin-bottom: 12px; }
+
+  .expanded-oss {
+    font-size: 13px;
+    color: var(--text);
+    line-height: 1.6;
+    margin-bottom: 10px;
+    padding: 10px 14px;
+    background: var(--bg);
+    border-radius: 8px;
+    border-left: 3px solid var(--accent);
+  }
+
+  .expanded-summary { font-size: 12px; color: var(--muted); line-height: 1.7; margin-bottom: 12px; }
+
+  .expanded-cats { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 10px; }
+
+  .expanded-cat {
+    font-family: var(--mono);
+    font-size: 10px;
+    padding: 2px 8px;
+    border-radius: 20px;
+    background: var(--accent-dim);
+    border: 1px solid rgba(14,165,233,0.3);
+    color: var(--accent);
+  }
+
+  .expanded-footer { display: flex; align-items: center; justify-content: space-between; margin-top: 8px; }
+  .expanded-date { font-family: var(--mono); font-size: 10px; color: var(--muted); }
+  .expanded-link { font-family: var(--mono); font-size: 11px; color: var(--accent); text-decoration: none; }
+  .expanded-link:hover { text-decoration: underline; }
+
+  .no-papers { text-align: center; padding: 48px 24px; color: var(--muted); font-size: 14px; }
+</style>
+</head>
+<body>
+
+<div class="app-header">
+  <div class="logo">Tribulator</div>
+  <div class="app-title">Clinical Trial Library</div>
+  <div class="tabs">
+    <button class="tab active" id="tabAdd">Add Paper</button>
+    <button class="tab" id="tabView">View Saved Papers</button>
+  </div>
+</div>
+
+<div class="content">
+
+  <!-- ADD PAPER -->
+  <div class="panel active" id="panelAdd">
+    <div class="card">
+      <div class="card-label">Find Paper</div>
+      <div id="searchMsg"></div>
+      <div class="search-wrap">
+        <span class="search-icon">&#9906;</span>
+        <input class="search-input" id="searchInput" type="text"
+          placeholder="URL, title, or reference e.g. N Engl J Med. 2024;391:985"
+          autocomplete="off" />
+      </div>
+      <button class="btn btn-primary" id="searchBtn">Find Paper</button>
+    </div>
+
+    <div id="paperCard" style="display:none">
+      <div class="card">
+        <div class="card-label">Paper Found</div>
+        <div class="paper-found" id="paperDetails"></div>
+
+        <hr class="divider">
+        <div class="card-label">AI Clinical Summary</div>
+        <button class="btn btn-outline" id="summariseBtn" style="margin-bottom:16px">
+          &#10022; Generate AI Summary
+        </button>
+        <div id="summaryMsg"></div>
+
+        <div class="summary-section" id="summarySection" style="display:none">
+          <div class="field-group">
+            <div class="field-label">Categories</div>
+            <div class="categories-wrap" id="categoriesWrap"></div>
+          </div>
+          <div class="field-group">
+            <div class="field-label">Subject Area</div>
+            <textarea class="field-value" id="subjectField" rows="1"></textarea>
+          </div>
+          <div class="field-group">
+            <div class="field-label">One Sentence Summary</div>
+            <textarea class="field-value" id="ossField" rows="3"></textarea>
+          </div>
+          <div class="field-group">
+            <div class="field-label">Full Summary</div>
+            <textarea class="field-value" id="fullSummaryField" rows="6"></textarea>
+          </div>
+        </div>
+
+        <hr class="divider">
+        <div id="exportMsg"></div>
+        <button class="btn btn-green" id="exportBtn">Export to Google Sheets</button>
+      </div>
+    </div>
+
+    <div class="tips">
+      <div class="tips-title">Supported inputs</div>
+      <div class="tip">Any PubMed, journal, or DOI URL</div>
+      <div class="tip">Paper title or keywords</div>
+      <div class="tip">Journal reference e.g. Lancet. 2023;401:1021</div>
+      <div class="tip">Full citation with authors</div>
+    </div>
+  </div>
+
+  <!-- VIEW PAPERS -->
+  <div class="panel" id="panelView">
+    <div class="papers-toolbar">
+      <div class="search-wrap" style="margin-bottom:0">
+        <span class="search-icon">&#9906;</span>
+        <input class="search-input" id="papersSearch" type="text"
+          placeholder="Search title, subject, summary, categories..."
+          autocomplete="off" />
+      </div>
+      <button class="load-btn" id="loadBtn">Load Papers</button>
+    </div>
+
+    <div id="papersMsg"></div>
+    <div class="papers-count" id="papersCount"></div>
+
+    <div class="col-header">
+      <span>Year</span>
+      <span>Title</span>
+      <span>Subject</span>
+      <span></span>
+    </div>
+
+    <div id="papersList"></div>
+  </div>
+
+</div>
+
+<script>
+// ─── Config ───────────────────────────────────────────────────
+var WEBHOOK_URL = 'https://script.google.com/macros/s/AKfycby6Rqzo6vVHEFZNVg84wEQ6lOU5YFIU9AoY3QElXbaDkgIVPa7k774UyQPOm5tRiF1b/exec';
+var SPREADSHEET_ID = '1wJZmgJBmt8-HUsyxnyFM5Urc-pEc5-Mr2g0zcRsf-D8';
+var API_KEY = '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';
+
+var CATEGORIES = [
+  'Airway','Cardiac','Crisis Management','Drugs','Education','ENT','Head + Neck',
+  'ICU','Interventional Radiology','Neuroanasesthesia','Obstetrics','Orthopaedics',
+  'Paediatrics','Pain','Perioperative','Plastics','Regional Anaesthesia',
+  'Resuscitation','Safety','Sedation','Thoracics','Trauma','Vascular'
+];
+
+var JOURNAL_QUARTILES = {
+  'new england journal of medicine': 'Q1', 'lancet': 'Q1', 'jama': 'Q1', 'bmj': 'Q1',
+  'intensive care medicine': 'Q1', 'critical care medicine': 'Q1',
+  'anesthesiology': 'Q1', 'british journal of anaesthesia': 'Q1',
+  'chest': 'Q1', 'annals of surgery': 'Q1', 'circulation': 'Q1',
+  'anaesthesia': 'Q2', 'critical care': 'Q2',
+  'journal of clinical anesthesia': 'Q2',
+  'regional anesthesia and pain medicine': 'Q2',
+  'current opinion in anaesthesiology': 'Q2',
+  'european journal of anaesthesiology': 'Q2'
+};
+
+var currentTrial = null;
+var currentDetails = null;
+var selectedCategories = [];
+var allPapers = [];
+
+// ─── Tab switching ────────────────────────────────────────────
+document.getElementById('tabAdd').addEventListener('click', function() {
+  document.getElementById('tabAdd').className = 'tab active';
+  document.getElementById('tabView').className = 'tab';
+  document.getElementById('panelAdd').className = 'panel active';
+  document.getElementById('panelView').className = 'panel';
+});
+
+document.getElementById('tabView').addEventListener('click', function() {
+  document.getElementById('tabAdd').className = 'tab';
+  document.getElementById('tabView').className = 'tab active';
+  document.getElementById('panelAdd').className = 'panel';
+  document.getElementById('panelView').className = 'panel active';
+});
+
+// ─── Helpers ──────────────────────────────────────────────────
+function getJournalQuartile(journal) {
+  if (!journal) return null;
+  var key = journal.toLowerCase().trim();
+  var names = Object.keys(JOURNAL_QUARTILES);
+  for (var i = 0; i < names.length; i++) {
+    if (key.indexOf(names[i]) !== -1 || names[i].indexOf(key) !== -1) return JOURNAL_QUARTILES[names[i]];
+  }
+  return null;
+}
+
+function showMsg(id, type, text) {
+  document.getElementById(id).innerHTML = '<div class="msg msg-' + type + '">' + text + '</div>';
+}
+
+function clearMsg(id) { document.getElementById(id).innerHTML = ''; }
+
+function setLoading(btnId, loading, text) {
+  var btn = document.getElementById(btnId);
+  btn.disabled = loading;
+  if (loading) btn.innerHTML = '<div class="spinner"></div> ' + (text || '');
+}
+
+// ─── Direct PubMed fetch (no proxy needed from GitHub Pages) ──
+function pubmedFetch(url) {
+  return fetch(url).then(function(r) { return r.json(); });
+}
+
+function pubmedFetchText(url) {
+  return fetch(url).then(function(r) { return r.text(); });
+}
+
+// ─── PubMed search ────────────────────────────────────────────
+function resolveFromURL(url) {
+  var pubmedMatch = url.match(/pubmed\.ncbi\.nlm\.nih\.gov\/(\d+)/);
+  if (pubmedMatch) return Promise.resolve(pubmedMatch[1]);
+
+  var pmcMatch = url.match(/pmc\.ncbi\.nlm\.nih\.gov\/articles\/PMC(\d+)/);
+  if (pmcMatch) {
+    return pubmedFetch('https://eutils.ncbi.nlm.nih.gov/entrez/eutils/elink.fcgi?dbfrom=pmc&db=pubmed&id=' + pmcMatch[1] + '&retmode=json')
+      .then(function(data) {
+        var ids = data.linksets && data.linksets[0] && data.linksets[0].linksetdbs && data.linksets[0].linksetdbs[0] && data.linksets[0].linksetdbs[0].links;
+        if (ids && ids.length) return String(ids[0]);
+        throw new Error('Could not find PubMed record for this PMC article');
+      });
+  }
+
+  var doi = null;
+  var doiOrgMatch = url.match(/doi\.org\/(.+)/);
+  if (doiOrgMatch) doi = doiOrgMatch[1];
+  var doiPathMatch = url.match(/\/(10\.\d{4,}\/[^\s?#]+)/);
+  if (doiPathMatch) doi = doiPathMatch[1];
+
+  if (doi) {
+    doi = doi.replace(/[.,;]$/, '').split('?')[0].split('#')[0];
+    return pubmedFetch('https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&term=' + encodeURIComponent(doi) + '[doi]&retmode=json')
+      .then(function(data) {
+        if (data.esearchresult && data.esearchresult.idlist && data.esearchresult.idlist.length) return data.esearchresult.idlist[0];
+        var piiMatch = url.match(/article\/(S[\w()-]+)\//);
+        if (piiMatch) {
+          return pubmedFetch('https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&term=' + encodeURIComponent(piiMatch[1]) + '[pii]&retmode=json')
+            .then(function(d) {
+              if (d.esearchresult && d.esearchresult.idlist && d.esearchresult.idlist.length) return d.esearchresult.idlist[0];
+              throw new Error('Could not find a PubMed record for this URL');
+            });
+        }
+        throw new Error('Could not find a PubMed record for this URL');
+      });
+  }
+
+  throw new Error('Could not find a PubMed record for this URL. Try searching by title instead.');
+}
+
+function resolveFromText(query) {
+  var refMatch = query.match(/([A-Za-z\s]+)\.\s*(\d{4});(\d+)(?:\(\d+\))?:(\d+)/);
+  if (refMatch) {
+    var q = refMatch[1].trim() + '[ta] AND ' + refMatch[2] + '[dp] AND ' + refMatch[3] + '[vi] AND ' + refMatch[4] + '[pg]';
+    return pubmedFetch('https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&term=' + encodeURIComponent(q) + '&retmax=5&retmode=json')
+      .then(function(data) {
+        if (data.esearchresult && data.esearchresult.idlist && data.esearchresult.idlist.length) return data.esearchresult.idlist[0];
+        return searchByTitle(query);
+      });
+  }
+  return searchByTitle(query);
+}
+
+function searchByTitle(query) {
+  var cleaned = query.replace(/^\d+\s*/, '').replace(/\bet al\b\.?/gi, '').replace(/\s+/g, ' ').trim();
+  var titleMatch = cleaned.match(/^(.+?)\.\s*(?:Curr|N Engl|JAMA|Lancet|BMJ|Ann|Br J|J |Am J|Eur|Crit|Anesth|Pain|Int|BJA|Acta|Arch|Chest|Circ|Cochrane|Emerg|Heart|Intensive|Med|Pediatr|Resuscitation|Shock|Stroke|Thorax)/i);
+  var title = titleMatch ? titleMatch[1].trim() : cleaned;
+  var terms = [title + '[ti]', title + '[tiab]', title.split(' ').filter(function(w) { return w.length > 4; }).slice(0, 6).join(' ')];
+
+  function tryNext(i) {
+    if (i >= terms.length) throw new Error('Could not find this paper on PubMed. Try pasting the PubMed URL directly.');
+    return pubmedFetch('https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&term=' + encodeURIComponent(terms[i]) + '&retmax=5&retmode=json')
+      .then(function(data) {
+        if (data.esearchresult && data.esearchresult.idlist && data.esearchresult.idlist.length) return data.esearchresult.idlist[0];
+        return tryNext(i + 1);
+      });
+  }
+  return tryNext(0);
+}
+
+function fetchTrialFromPubmedId(pubmedId) {
+  return Promise.all([
+    pubmedFetch('https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?db=pubmed&id=' + pubmedId + '&retmode=json'),
+    pubmedFetchText('https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=pubmed&id=' + pubmedId + '&retmode=xml&rettype=abstract')
+  ]).then(function(results) {
+    var summaryData = results[0];
+    var xmlText = results[1];
+    var art = summaryData.result && summaryData.result[pubmedId];
+    var abstract = '';
+    var abstractMatches = xmlText && xmlText.match ? xmlText.match(/<AbstractText[^>]*>([\s\S]*?)<\/AbstractText>/g) : null;
+    if (abstractMatches) {
+      abstract = abstractMatches.map(function(block) {
+        var labelMatch = block.match(/Label="([^"]+)"/);
+        var textMatch = block.match(/<AbstractText[^>]*>([\s\S]*?)<\/AbstractText>/);
+        var label = labelMatch ? labelMatch[1] + ': ' : '';
+        var text = textMatch ? textMatch[1].replace(/<[^>]+>/g, '') : '';
+        return label + text;
+      }).join('\n\n');
+    }
+    var journal = (art && art.fulljournalname) || '';
+    var year = (art && art.pubdate) ? art.pubdate.split(' ')[0] : '';
+    var volume = (art && art.volume) || '';
+    var issue = (art && art.issue) ? '(' + art.issue + ')' : '';
+    var pages = (art && art.pages) || '';
+    var reference = (journal + ' ' + year + ';' + volume + issue + ':' + pages).trim();
+    return {
+      trial: {
+        id: 'pubmed-' + pubmedId,
+        pubmedId: String(pubmedId),
+        title: (art && art.title) || '',
+        journal: journal,
+        pubdate: (art && art.pubdate) || '',
+        quartile: getJournalQuartile(journal),
+        url: 'https://pubmed.ncbi.nlm.nih.gov/' + pubmedId + '/',
+        storedReference: reference
+      },
+      details: {
+        journal: journal, volume: art && art.volume, issue: art && art.issue,
+        pages: art && art.pages, pubdate: art && art.pubdate, abstract: abstract,
+        authors: art && art.authors ? art.authors.map(function(a) { return a.name; }).join(', ') : ''
+      }
+    };
+  });
+}
+
+// ─── Handle Search ────────────────────────────────────────────
+function handleSearch() {
+  var query = document.getElementById('searchInput').value.trim();
+  if (!query) return;
+  clearMsg('searchMsg');
+  setLoading('searchBtn', true, 'Searching...');
+  document.getElementById('paperCard').style.display = 'none';
+
+  var promise = (query.indexOf('http://') === 0 || query.indexOf('https://') === 0) ? resolveFromURL(query) : resolveFromText(query);
+
+  promise.then(function(pubmedId) {
+    return fetchTrialFromPubmedId(pubmedId);
+  }).then(function(result) {
+    currentTrial = result.trial;
+    currentDetails = result.details;
+    renderPaper();
+    document.getElementById('paperCard').style.display = 'block';
+  }).catch(function(e) {
+    showMsg('searchMsg', 'error', e.message);
+  }).finally(function() {
+    var btn = document.getElementById('searchBtn');
+    btn.disabled = false;
+    btn.innerHTML = 'Find Paper';
+  });
+}
+
+function renderPaper() {
+  var t = currentTrial;
+  var d = currentDetails;
+  var q = t.quartile;
+  var qBadge = q ? '<span class="quartile-badge ' + q.toLowerCase() + '">' + q + '</span>' : '';
+  var abstractHtml = '';
+  if (d.abstract) {
+    abstractHtml = '<hr class="divider"><div class="field-label">Abstract</div>' +
+      '<div class="abstract-text" id="abstractText">' + d.abstract.replace(/\n\n/g, '<br><br>') + '</div>' +
+      '<button class="abstract-toggle" id="abstractToggle">Show more</button>';
+  }
+  document.getElementById('paperDetails').innerHTML =
+    '<div class="paper-title">' + t.title + ' ' + qBadge + '</div>' +
+    '<div class="paper-meta">' + t.journal + ' &middot; ' + t.pubdate + '</div>' +
+    '<div class="paper-ref">' + t.storedReference + '</div>' +
+    '<a class="pubmed-link" href="' + t.url + '" target="_blank">View on PubMed</a>' +
+    abstractHtml;
+  document.getElementById('summariseBtn').innerHTML = '&#10022; Generate AI Summary';
+  document.getElementById('summarySection').style.display = 'none';
+  clearMsg('exportMsg');
+  document.getElementById('exportBtn').innerHTML = 'Export to Google Sheets';
+  document.getElementById('exportBtn').disabled = false;
+  selectedCategories = [];
+  if (d.abstract) {
+    document.getElementById('abstractToggle').addEventListener('click', toggleAbstract);
+  }
+}
+
+function toggleAbstract() {
+  var el = document.getElementById('abstractText');
+  var btn = document.getElementById('abstractToggle');
+  el.classList.toggle('expanded');
+  btn.textContent = el.classList.contains('expanded') ? 'Show less' : 'Show more';
+}
+
+// ─── AI Summary ───────────────────────────────────────────────
+function generateSummary() {
+  if (!currentTrial || !currentDetails) return;
+  clearMsg('summaryMsg');
+  setLoading('summariseBtn', true, 'Generating summary...');
+
+  var prompt = 'You are a clinical expert in anaesthesia and critical care. Given the following published paper, provide four things for a practising clinician:\n\n' +
+    '1. COMPREHENSIVE: A 5-6 sentence summary covering what was studied, the methodology, key findings, clinical relevance, and any important caveats or limitations.\n' +
+    '2. HEADLINE: A single sentence (max 25 words) capturing the most important clinical takeaway.\n' +
+    '3. SUBJECT: 2-4 words describing the subject area.\n' +
+    '4. CATEGORY: Choose all appropriate categories from this list: ' + CATEGORIES.join(', ') + '. Return as a JSON array.\n\n' +
+    'Respond in this exact JSON format with no other text:\n{"comprehensive":"...","headline":"...","subject":"...","category":["..."]}\n\n' +
+    'Title: ' + currentTrial.title + '\nJournal: ' + currentTrial.journal + '\nPublished: ' + currentTrial.pubdate + '\nAbstract: ' + (currentDetails.abstract || 'Not available');
+
+  fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': API_KEY,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true'
+    },
+    body: JSON.stringify({ model: 'claude-sonnet-4-20250514', max_tokens: 800, messages: [{ role: 'user', content: prompt }] })
+  }).then(function(r) { return r.json(); })
+  .then(function(data) {
+    if (data.error) throw new Error(data.error.message);
+    var text = (data.content && data.content[0] && data.content[0].text) || '{}';
+    var summary = JSON.parse(text.replace(/```json|```/g, '').trim());
+    document.getElementById('subjectField').value = summary.subject || '';
+    document.getElementById('ossField').value = summary.headline || '';
+    document.getElementById('fullSummaryField').value = summary.comprehensive || '';
+    selectedCategories = Array.isArray(summary.category) ? summary.category : [];
+    renderCategories();
+    document.getElementById('summarySection').style.display = 'block';
+    showMsg('summaryMsg', 'success', 'Summary generated. Edit if needed before exporting.');
+  }).catch(function(e) {
+    showMsg('summaryMsg', 'error', 'Failed to generate summary: ' + e.message);
+  }).finally(function() {
+    var btn = document.getElementById('summariseBtn');
+    btn.disabled = false;
+    btn.innerHTML = 'Regenerate AI Summary';
+  });
+}
+
+function renderCategories() {
+  var wrap = document.getElementById('categoriesWrap');
+  wrap.innerHTML = CATEGORIES.map(function(cat, i) {
+    var sel = selectedCategories.indexOf(cat) !== -1 ? ' selected' : '';
+    return '<button class="cat-tag' + sel + '" data-index="' + i + '">' + cat + '</button>';
+  }).join('');
+  var btns = wrap.querySelectorAll('.cat-tag');
+  for (var i = 0; i < btns.length; i++) {
+    btns[i].addEventListener('click', function() { toggleCategory(CATEGORIES[parseInt(this.dataset.index)]); });
+  }
+}
+
+function toggleCategory(cat) {
+  var idx = selectedCategories.indexOf(cat);
+  if (idx !== -1) selectedCategories.splice(idx, 1);
+  else selectedCategories.push(cat);
+  renderCategories();
+}
+
+// ─── Export to Sheets (direct POST to webhook) ────────────────
+function exportToSheets() {
+  if (!currentTrial) return;
+  clearMsg('exportMsg');
+  setLoading('exportBtn', true, 'Exporting...');
+
+  var categoryFlags = {};
+  CATEGORIES.forEach(function(cat) {
+    categoryFlags[cat] = selectedCategories.indexOf(cat) !== -1 ? 'TRUE' : 'FALSE';
+  });
+
+  var payload = {
+    spreadsheetId: SPREADSHEET_ID,
+    subject: document.getElementById('subjectField').value,
+    oss: document.getElementById('ossField').value,
+    fullSummary: document.getElementById('fullSummaryField').value,
+    year: currentTrial.pubdate ? currentTrial.pubdate.split(' ')[0] : '',
+    title: currentTrial.title,
+    reference: currentTrial.storedReference,
+    url: currentTrial.url,
+    date: new Date().toLocaleDateString(),
+    categoryFlags: categoryFlags
+  };
+
+  fetch(WEBHOOK_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  }).then(function(r) { return r.json(); })
+  .then(function(data) {
+    if (!data.success) throw new Error(data.error || 'Export failed');
+    showMsg('exportMsg', 'success', 'Saved to Google Sheets successfully.');
+  }).catch(function(e) {
+    showMsg('exportMsg', 'error', 'Export failed: ' + e.message);
+  }).finally(function() {
+    var btn = document.getElementById('exportBtn');
+    btn.disabled = false;
+    btn.innerHTML = 'Export to Google Sheets';
+  });
+}
+
+// ─── Load Papers (direct POST to webhook) ────────────────────
+function loadPapers() {
+  clearMsg('papersMsg');
+  var btn = document.getElementById('loadBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<div class="spinner"></div> Loading...';
+
+  fetch(WEBHOOK_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action: 'getPapers', spreadsheetId: SPREADSHEET_ID })
+  }).then(function(r) { return r.json(); })
+  .then(function(result) {
+    btn.disabled = false;
+    btn.innerHTML = 'Reload';
+    if (!result || !result.success) {
+      showMsg('papersMsg', 'error', 'Failed to load: ' + (result ? result.error : 'Unknown error'));
+      return;
+    }
+    allPapers = result.papers;
+    renderPapers(allPapers);
+  }).catch(function(e) {
+    btn.disabled = false;
+    btn.innerHTML = 'Load Papers';
+    showMsg('papersMsg', 'error', 'Failed to load: ' + e.message);
+  });
+}
+
+function renderPapers(papers) {
+  var count = document.getElementById('papersCount');
+  var list = document.getElementById('papersList');
+  if (!papers || papers.length === 0) {
+    count.textContent = '';
+    list.innerHTML = '<div class="no-papers">No papers found. Export some papers first.</div>';
+    return;
+  }
+  count.textContent = papers.length + ' paper' + (papers.length !== 1 ? 's' : '');
+  list.innerHTML = papers.map(function(p, idx) {
+    var cats = p.categories || [];
+    var catsHtml = cats.map(function(c) { return '<span class="expanded-cat">' + c + '</span>'; }).join('');
+    var linkHtml = p.url ? '<a class="expanded-link" href="' + p.url + '" target="_blank">&#8599; Link</a>' : '';
+    return '<div class="paper-row" data-idx="' + idx + '">' +
+      '<div class="paper-row-collapsed">' +
+        '<span class="row-year">' + (p.year || '') + '</span>' +
+        '<span class="row-title">' + (p.title || '') + '</span>' +
+        '<span class="row-subject">' + (p.subject || '') + '</span>' +
+        '<span class="row-chevron">&#9660;</span>' +
+      '</div>' +
+      '<div class="paper-row-expanded">' +
+        '<div class="expanded-title">' + (p.title || '') + '</div>' +
+        '<div class="expanded-meta">' + (p.reference || '') + '</div>' +
+        (p.oss ? '<div class="expanded-oss">' + p.oss + '</div>' : '') +
+        (p.fullSummary ? '<div class="expanded-summary">' + p.fullSummary + '</div>' : '') +
+        (catsHtml ? '<div class="expanded-cats">' + catsHtml + '</div>' : '') +
+        '<div class="expanded-footer">' +
+          '<span class="expanded-date">' + (p.dateEntered || '') + '</span>' +
+          linkHtml +
+        '</div>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+
+  var rows = list.querySelectorAll('.paper-row');
+  for (var i = 0; i < rows.length; i++) {
+    rows[i].addEventListener('click', function(e) {
+      if (e.target.tagName === 'A') return;
+      this.classList.toggle('expanded');
+    });
+  }
+}
+
+function filterPapers() {
+  var q = document.getElementById('papersSearch').value.toLowerCase().trim();
+  if (!q) { renderPapers(allPapers); return; }
+  var filtered = allPapers.filter(function(p) {
+    var searchable = [p.title, p.subject, p.oss, p.fullSummary, p.reference, p.year, (p.categories || []).join(' ')].join(' ').toLowerCase();
+    return searchable.indexOf(q) !== -1;
+  });
+  renderPapers(filtered);
+}
+
+// ─── Prefill from URL param ───────────────────────────────────
+var params = new URLSearchParams(window.location.search);
+var prefillTitle = params.get('title') || '';
+if (prefillTitle && prefillTitle.trim() !== '') {
+  document.getElementById('searchInput').value = prefillTitle;
+  handleSearch();
+}
+
+// ─── Event listeners ──────────────────────────────────────────
+document.getElementById('searchBtn').addEventListener('click', handleSearch);
+document.getElementById('summariseBtn').addEventListener('click', generateSummary);
+document.getElementById('exportBtn').addEventListener('click', exportToSheets);
+document.getElementById('loadBtn').addEventListener('click', loadPapers);
+document.getElementById('searchInput').addEventListener('keydown', function(e) { if (e.key === 'Enter') handleSearch(); });
+document.getElementById('papersSearch').addEventListener('input', filterPapers);
+</script>
+</body>
+</html>
