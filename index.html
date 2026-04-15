@@ -600,6 +600,7 @@
 var WEBHOOK_URL = 'https://script.google.com/macros/s/AKfycby6Rqzo6vVHEFZNVg84wEQ6lOU5YFIU9AoY3QElXbaDkgIVPa7k774UyQPOm5tRiF1b/exec';
 var SPREADSHEET_ID = '1wJZmgJBmt8-HUsyxnyFM5Urc-pEc5-Mr2g0zcRsf-D8';
 var API_KEY = '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';
+var SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbw7NClZkV7xeJkfiQcMz3MFql-2dCqY9CYQbTOKT-Hb0ShfiVHuldjKoDTZcZlzADqc/exec';
 
 var CATEGORIES = [
   'Airway','Cardiac','Crisis Management','Drugs','Education','ENT','Head + Neck',
@@ -936,10 +937,10 @@ function exportToSheets() {
     categoryFlags: categoryFlags
   };
 
-  fetch(WEBHOOK_URL + '?action=export&payload=' + encodeURIComponent(JSON.stringify(payload)))
+  fetch(SCRIPT_URL + '?action=export&payload=' + encodeURIComponent(JSON.stringify(payload)))
     .then(function(r) { return r.json(); })
     .then(function(data) {
-      if (!data.success) throw new Error(data.error || 'Export failed');
+      if (!data.success) throw new Error(data.error || JSON.stringify(data));
       showMsg('exportMsg', 'success', 'Saved to Google Sheets successfully.');
     }).catch(function(e) {
       showMsg('exportMsg', 'error', 'Export failed: ' + e.message);
@@ -957,7 +958,7 @@ function loadPapers() {
   btn.disabled = true;
   btn.innerHTML = '<div class="spinner"></div> Loading...';
 
-  fetch(WEBHOOK_URL + '?action=getPapers&spreadsheetId=' + encodeURIComponent(SPREADSHEET_ID))
+  fetch(SCRIPT_URL + '?action=getPapers&spreadsheetId=' + encodeURIComponent(SPREADSHEET_ID))
     .then(function(r) { return r.json(); })
     .then(function(result) {
       btn.disabled = false;
