@@ -605,18 +605,16 @@ var API_KEY = '';
 var SCRIPT_URL = '';
 
 function loadConfig() {
-  return fetch('https://sheets.googleapis.com/v4/spreadsheets/' + CONFIG_SPREADSHEET_ID + '/values/Sheet1!B7:B10?alt=json')
+  var SHEETS_API_KEY = 'AIzaSyBBHB65go47Zx0UEcKPRdnkgN7fhLs8yrQ';
+  return fetch('https://sheets.googleapis.com/v4/spreadsheets/' + CONFIG_SPREADSHEET_ID + '/values/Sheet1!B7:B10?key=' + SHEETS_API_KEY)
     .then(function(r) { return r.json(); })
     .then(function(data) {
-      console.log('Config data:', JSON.stringify(data));
       if (data.error) throw new Error(data.error.message);
       var values = data.values || [];
-      console.log('Values:', JSON.stringify(values));
       API_KEY        = (values[0] && values[0][0]) || '';
       SCRIPT_URL     = (values[1] && values[1][0]) || '';
       WEBHOOK_URL    = (values[2] && values[2][0]) || '';
       SPREADSHEET_ID = (values[3] && values[3][0]) || '';
-      console.log('API_KEY loaded:', API_KEY ? 'yes' : 'no');
     });
 }
 
