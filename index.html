@@ -871,6 +871,7 @@ function toggleAbstract() {
 // ─── AI Summary ───────────────────────────────────────────────
 function generateSummary() {
   if (!currentTrial || !currentDetails) return;
+  console.log('API_KEY value:', API_KEY ? API_KEY.substring(0, 20) + '...' : 'EMPTY');
   clearMsg('summaryMsg');
   setLoading('summariseBtn', true, 'Generating summary...');
 
