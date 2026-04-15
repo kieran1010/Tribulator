@@ -1049,21 +1049,25 @@ function filterPapers() {
   renderPapers(filtered);
 }
 
-// ─── Prefill from URL param ───────────────────────────────────
-var params = new URLSearchParams(window.location.search);
-var prefillTitle = params.get('title') || '';
-if (prefillTitle && prefillTitle.trim() !== '') {
-  document.getElementById('searchInput').value = prefillTitle;
-  handleSearch();
-}
+// Load config then initialise
+loadConfig().then(function() {
+  document.getElementById('searchBtn').addEventListener('click', handleSearch);
+  document.getElementById('summariseBtn').addEventListener('click', generateSummary);
+  document.getElementById('exportBtn').addEventListener('click', exportToSheets);
+  document.getElementById('loadBtn').addEventListener('click', loadPapers);
+  document.getElementById('searchInput').addEventListener('keydown', function(e) { if (e.key === 'Enter') handleSearch(); });
+  document.getElementById('papersSearch').addEventListener('input', filterPapers);
 
-// ─── Event listeners ──────────────────────────────────────────
-document.getElementById('searchBtn').addEventListener('click', handleSearch);
-document.getElementById('summariseBtn').addEventListener('click', generateSummary);
-document.getElementById('exportBtn').addEventListener('click', exportToSheets);
-document.getElementById('loadBtn').addEventListener('click', loadPapers);
-document.getElementById('searchInput').addEventListener('keydown', function(e) { if (e.key === 'Enter') handleSearch(); });
-document.getElementById('papersSearch').addEventListener('input', filterPapers);
+  var params = new URLSearchParams(window.location.search);
+  var prefillTitle = params.get('title') || '';
+  if (prefillTitle && prefillTitle.trim() !== '') {
+    document.getElementById('searchInput').value = prefillTitle;
+    handleSearch();
+  }
+}).catch(function(e) {
+  document.body.insertAdjacentHTML('afterbegin',
+    '<div style="background:#ef4444;color:white;padding:16px;text-align:center">Failed to load config: ' + e.message + '</div>');
+});
 </script>
 </body>
 </html>
