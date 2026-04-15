@@ -597,10 +597,28 @@
 
 <script>
 // ─── Config ───────────────────────────────────────────────────
-var WEBHOOK_URL = 'https://script.google.com/macros/s/AKfycby6Rqzo6vVHEFZNVg84wEQ6lOU5YFIU9AoY3QElXbaDkgIVPa7k774UyQPOm5tRiF1b/exec';
-var SPREADSHEET_ID = '1wJZmgJBmt8-HUsyxnyFM5Urc-pEc5-Mr2g0zcRsf-D8';
-var API_KEY = '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';
-var SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbw7NClZkV7xeJkfiQcMz3MFql-2dCqY9CYQbTOKT-Hb0ShfiVHuldjKoDTZcZlzADqc/exec';
+var CONFIG_SPREADSHEET_ID = '1nrWJa0cl5NBhM3pk0gvZk3-V0TTbh0YRZlarzrjxa_s';
+
+var WEBHOOK_URL = '';
+var SPREADSHEET_ID = '';
+var API_KEY = '';
+var SCRIPT_URL = '';
+
+function loadConfig() {
+  return fetch('https://sheets.googleapis.com/v4/spreadsheets/' + CONFIG_SPREADSHEET_ID + '/values/Sheet1!B7:B10?alt=json')
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      console.log('Config data:', JSON.stringify(data));
+      if (data.error) throw new Error(data.error.message);
+      var values = data.values || [];
+      console.log('Values:', JSON.stringify(values));
+      API_KEY        = (values[0] && values[0][0]) || '';
+      SCRIPT_URL     = (values[1] && values[1][0]) || '';
+      WEBHOOK_URL    = (values[2] && values[2][0]) || '';
+      SPREADSHEET_ID = (values[3] && values[3][0]) || '';
+      console.log('API_KEY loaded:', API_KEY ? 'yes' : 'no');
+    });
+}
 
 var CATEGORIES = [
   'Airway','Cardiac','Crisis Management','Drugs','Education','ENT','Head + Neck',
