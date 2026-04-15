@@ -936,21 +936,18 @@ function exportToSheets() {
     categoryFlags: categoryFlags
   };
 
-  fetch(WEBHOOK_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload)
-  }).then(function(r) { return r.json(); })
-  .then(function(data) {
-    if (!data.success) throw new Error(data.error || 'Export failed');
-    showMsg('exportMsg', 'success', 'Saved to Google Sheets successfully.');
-  }).catch(function(e) {
-    showMsg('exportMsg', 'error', 'Export failed: ' + e.message);
-  }).finally(function() {
-    var btn = document.getElementById('exportBtn');
-    btn.disabled = false;
-    btn.innerHTML = 'Export to Google Sheets';
-  });
+  fetch(WEBHOOK_URL + '?action=export&payload=' + encodeURIComponent(JSON.stringify(payload)))
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (!data.success) throw new Error(data.error || 'Export failed');
+      showMsg('exportMsg', 'success', 'Saved to Google Sheets successfully.');
+    }).catch(function(e) {
+      showMsg('exportMsg', 'error', 'Export failed: ' + e.message);
+    }).finally(function() {
+      var btn = document.getElementById('exportBtn');
+      btn.disabled = false;
+      btn.innerHTML = 'Export to Google Sheets';
+    });
 }
 
 // ─── Load Papers (direct POST to webhook) ────────────────────
@@ -960,25 +957,22 @@ function loadPapers() {
   btn.disabled = true;
   btn.innerHTML = '<div class="spinner"></div> Loading...';
 
-  fetch(WEBHOOK_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ action: 'getPapers', spreadsheetId: SPREADSHEET_ID })
-  }).then(function(r) { return r.json(); })
-  .then(function(result) {
-    btn.disabled = false;
-    btn.innerHTML = 'Reload';
-    if (!result || !result.success) {
-      showMsg('papersMsg', 'error', 'Failed to load: ' + (result ? result.error : 'Unknown error'));
-      return;
-    }
-    allPapers = result.papers;
-    renderPapers(allPapers);
-  }).catch(function(e) {
-    btn.disabled = false;
-    btn.innerHTML = 'Load Papers';
-    showMsg('papersMsg', 'error', 'Failed to load: ' + e.message);
-  });
+  fetch(WEBHOOK_URL + '?action=getPapers&spreadsheetId=' + encodeURIComponent(SPREADSHEET_ID))
+    .then(function(r) { return r.json(); })
+    .then(function(result) {
+      btn.disabled = false;
+      btn.innerHTML = 'Reload';
+      if (!result || !result.success) {
+        showMsg('papersMsg', 'error', 'Failed to load: ' + (result ? result.error : 'Unknown error'));
+        return;
+      }
+      allPapers = result.papers;
+      renderPapers(allPapers);
+    }).catch(function(e) {
+      btn.disabled = false;
+      btn.innerHTML = 'Load Papers';
+      showMsg('papersMsg', 'error', 'Failed to load: ' + e.message);
+    });
 }
 
 function renderPapers(papers) {
