@@ -915,7 +915,8 @@ function toggleCategory(cat) {
 
 // ─── Export to Sheets (direct POST to webhook) ────────────────
 function exportToSheets() {
-  if (!currentTrial) return;
+  console.log('exportToSheets called');
+  if (!currentTrial) { console.log('no currentTrial'); return; }
   clearMsg('exportMsg');
   setLoading('exportBtn', true, 'Exporting...');
 
