@@ -605,16 +605,21 @@ var API_KEY = '';
 var SCRIPT_URL = '';
 
 function loadConfig() {
-  var SHEETS_API_KEY = 'AIzaSyBBHB65go47Zx0UEcKPRdnkgN7fhLs8yrQ';
-  return fetch('https://sheets.googleapis.com/v4/spreadsheets/' + CONFIG_SPREADSHEET_ID + '/values/Sheet1!B7:B10?key=' + SHEETS_API_KEY)
-    .then(function(r) { return r.json(); })
-    .then(function(data) {
-      if (data.error) throw new Error(data.error.message);
-      var values = data.values || [];
-      API_KEY        = (values[0] && values[0][0]) || '';
-      SCRIPT_URL     = (values[1] && values[1][0]) || '';
-      WEBHOOK_URL    = (values[2] && values[2][0]) || '';
-      SPREADSHEET_ID = (values[3] && values[3][0]) || '';
+  var csvUrl = 'https://docs.google.com/spreadsheets/d/' + CONFIG_SPREADSHEET_ID + '/export?format=csv&sheet=Sheet1';
+  return fetch(csvUrl)
+    .then(function(r) { return r.text(); })
+    .then(function(csv) {
+      var rows = csv.split('\n').map(function(row) {
+        return row.split(',').map(function(cell) {
+          return cell.replace(/^"|"$/g, '').trim();
+        });
+      });
+      // rows[6] = row 7, column B = index 1
+      API_KEY        = (rows[6]  && rows[6][1])  || '';
+      SCRIPT_URL     = (rows[7]  && rows[7][1])  || '';
+      WEBHOOK_URL    = (rows[8]  && rows[8][1])  || '';
+      SPREADSHEET_ID = (rows[9]  && rows[9][1])  || '';
+      console.log('Config loaded - API_KEY present:', !!API_KEY);
     });
 }
 
