@@ -598,27 +598,21 @@
 <script>
 // ─── Config ───────────────────────────────────────────────────
 var CONFIG_SPREADSHEET_ID = '1nrWJa0cl5NBhM3pk0gvZk3-V0TTbh0YRZlarzrjxa_s';
+var SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbw7NClZkV7xeJkfiQcMz3MFql-2dCqY9CYQbTOKT-Hb0ShfiVHuldjKoDTZcZlzADqc/exec';
 
 var WEBHOOK_URL = '';
 var SPREADSHEET_ID = '';
 var API_KEY = '';
-var SCRIPT_URL = '';
 
 function loadConfig() {
-  var csvUrl = 'https://docs.google.com/spreadsheets/d/' + CONFIG_SPREADSHEET_ID + '/export?format=csv&sheet=Sheet1';
-  return fetch(csvUrl)
-    .then(function(r) { return r.text(); })
-    .then(function(csv) {
-      var rows = csv.split('\n').map(function(row) {
-        return row.split(',').map(function(cell) {
-          return cell.replace(/^"|"$/g, '').trim();
-        });
-      });
-      // rows[6] = row 7, column B = index 1
-      API_KEY        = (rows[6]  && rows[6][1])  || '';
-      SCRIPT_URL     = (rows[7]  && rows[7][1])  || '';
-      WEBHOOK_URL    = (rows[8]  && rows[8][1])  || '';
-      SPREADSHEET_ID = (rows[9]  && rows[9][1])  || '';
+  return fetch(SCRIPT_URL + '?action=getConfig')
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (!data.success) throw new Error(data.error);
+      API_KEY        = data.apiKey        || '';
+      WEBHOOK_URL    = data.webhookUrl    || '';
+      SPREADSHEET_ID = data.spreadsheetId || '';
+      if (data.scriptUrl) SCRIPT_URL = data.scriptUrl;
       console.log('Config loaded - API_KEY present:', !!API_KEY);
     });
 }
