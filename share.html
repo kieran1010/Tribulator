@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tribulator — Adding Paper</title>
+<link rel="manifest" href="/Tribulator/manifest.json">
+<meta name="theme-color" content="#0ea5e9">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: #0a0e14;
+    color: #e2e8f0;
+    font-family: -apple-system, 'DM Sans', sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+  }
+
+  .logo {
+    font-family: monospace;
+    font-size: 11px;
+    letter-spacing: 0.2em;
+    color: #0ea5e9;
+    text-transform: uppercase;
+    margin-bottom: 32px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .dot {
+    width: 8px;
+    height: 8px;
+    background: #0ea5e9;
+    border-radius: 50%;
+    animation: pulse 2s ease-in-out infinite;
+  }
+
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+  .card {
+    background: #111820;
+    border: 1px solid #1e2a38;
+    border-radius: 16px;
+    padding: 32px 28px;
+    width: 100%;
+    max-width: 420px;
+    text-align: center;
+  }
+
+  .status-icon { font-size: 40px; margin-bottom: 16px; }
+  .status-title { font-size: 18px; font-weight: 600; margin-bottom: 8px; }
+  .status-msg { font-size: 13px; color: #64748b; line-height: 1.6; margin-bottom: 16px; }
+
+  .url-box {
+    background: #0a0e14;
+    border: 1px solid #1e2a38;
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-family: monospace;
+    font-size: 11px;
+    color: #64748b;
+    word-break: break-all;
+    text-align: left;
+    line-height: 1.5;
+    margin-bottom: 16px;
+  }
+
+  .spinner {
+    width: 36px;
+    height: 36px;
+    border: 3px solid rgba(14,165,233,0.2);
+    border-top-color: #0ea5e9;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin: 0 auto 16px;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .steps { margin-bottom: 16px; }
+
+  .step {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 0;
+    font-size: 13px;
+    color: #64748b;
+    border-bottom: 1px solid #1e2a38;
+    text-align: left;
+  }
+
+  .step:last-child { border-bottom: none; }
+
+  .step-icon {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    flex-shrink: 0;
+    background: #1e2a38;
+    color: #64748b;
+  }
+
+  .step.active .step-icon {
+    background: rgba(14,165,233,0.2);
+    color: #0ea5e9;
+  }
+
+  .step.done .step-icon {
+    background: rgba(16,185,129,0.2);
+    color: #10b981;
+  }
+
+  .step.active { color: #e2e8f0; }
+  .step.done { color: #10b981; }
+  .step.error { color: #ef4444; }
+  .step.error .step-icon { background: rgba(239,68,68,0.2); color: #ef4444; }
+
+  .step-spinner {
+    width: 12px;
+    height: 12px;
+    border: 2px solid rgba(14,165,233,0.3);
+    border-top-color: #0ea5e9;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+
+  .btn {
+    display: inline-block;
+    padding: 12px 24px;
+    background: #0ea5e9;
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    text-decoration: none;
+    margin-top: 8px;
+  }
+
+  .btn:hover { background: #38bdf8; }
+  .btn-outline {
+    background: transparent;
+    border: 1px solid #1e2a38;
+    color: #64748b;
+    margin-left: 8px;
+  }
+</style>
+</head>
+<body>
+
+<div class="logo"><div class="dot"></div>Tribulator</div>
+
+<div class="card" id="card">
+  <div class="spinner" id="mainSpinner"></div>
+  <div class="status-title" id="statusTitle">Adding to library...</div>
+  <div class="url-box" id="urlBox"></div>
+
+  <div class="steps" id="steps">
+    <div class="step" id="step1">
+      <div class="step-icon" id="step1icon">1</div>
+      <span>Loading config</span>
+    </div>
+    <div class="step" id="step2">
+      <div class="step-icon" id="step2icon">2</div>
+      <span>Looking up on PubMed</span>
+    </div>
+    <div class="step" id="step3">
+      <div class="step-icon" id="step3icon">3</div>
+      <span>Fetching paper details</span>
+    </div>
+    <div class="step" id="step4">
+      <div class="step-icon" id="step4icon">4</div>
+      <span>Generating AI summary</span>
+    </div>
+    <div class="step" id="step5">
+      <div class="step-icon" id="step5icon">5</div>
+      <span>Saving to Google Sheets</span>
+    </div>
+  </div>
+</div>
+
+<script>
+var SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbw7NClZkV7xeJkfiQcMz3MFql-2dCqY9CYQbTOKT-Hb0ShfiVHuldjKoDTZcZlzADqc/exec';
+var API_KEY = '';
+var WEBHOOK_URL = '';
+var SPREADSHEET_ID = '';
+
+var CATEGORIES = [
+  'Airway','Cardiac','Crisis Management','Drugs','Education','ENT','Head + Neck',
+  'ICU','Interventional Radiology','Neuroanasesthesia','Obstetrics','Orthopaedics',
+  'Paediatrics','Pain','Perioperative','Plastics','Regional Anaesthesia',
+  'Resuscitation','Safety','Sedation','Thoracics','Trauma','Vascular'
+];
+
+function setStep(n, state) {
+  var step = document.getElementById('step' + n);
+  var icon = document.getElementById('step' + n + 'icon');
+  step.className = 'step ' + state;
+  if (state === 'active') {
+    icon.innerHTML = '<div class="step-spinner"></div>';
+  } else if (state === 'done') {
+    icon.innerHTML = '&#10003;';
+  } else if (state === 'error') {
+    icon.innerHTML = '&#10007;';
+  } else {
+    icon.innerHTML = n;
+  }
+}
+
+function showSuccess(title) {
+  document.getElementById('mainSpinner').style.display = 'none';
+  document.getElementById('statusTitle').textContent = 'Saved!';
+  document.getElementById('statusTitle').style.color = '#10b981';
+  var footer = document.createElement('div');
+  footer.style.marginTop = '16px';
+  footer.innerHTML = '<a href="/Tribulator/" class="btn">Go to Tribulator</a>';
+  document.getElementById('card').appendChild(footer);
+}
+
+function showError(msg) {
+  document.getElementById('mainSpinner').style.display = 'none';
+  document.getElementById('statusTitle').textContent = 'Failed';
+  document.getElementById('statusTitle').style.color = '#ef4444';
+  var footer = document.createElement('div');
+  footer.style.marginTop = '16px';
+  footer.style.fontSize = '12px';
+  footer.style.color = '#64748b';
+  footer.style.marginBottom = '12px';
+  footer.textContent = msg;
+  document.getElementById('card').appendChild(footer);
+  var btns = document.createElement('div');
+  btns.innerHTML = '<a href="/Tribulator/" class="btn">Go to Tribulator</a>';
+  document.getElementById('card').appendChild(btns);
+}
+
+function loadConfig() {
+  setStep(1, 'active');
+  return fetch(SCRIPT_URL + '?action=getConfig')
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (!data.success) throw new Error(data.error);
+      API_KEY        = data.apiKey        || '';
+      WEBHOOK_URL    = data.webhookUrl    || '';
+      SPREADSHEET_ID = data.spreadsheetId || '';
+      if (data.scriptUrl) SCRIPT_URL = data.scriptUrl;
+      setStep(1, 'done');
+    });
+}
+
+function resolveURLtoPubmedId(url) {
+  setStep(2, 'active');
+
+  var pubmedMatch = url.match(/pubmed\.ncbi\.nlm\.nih\.gov\/(\d+)/);
+  if (pubmedMatch) { setStep(2, 'done'); return Promise.resolve(pubmedMatch[1]); }
+
+  var pmcMatch = url.match(/pmc\.ncbi\.nlm\.nih\.gov\/articles\/PMC(\d+)/);
+  if (pmcMatch) {
+    return fetch('https://eutils.ncbi.nlm.nih.gov/entrez/eutils/elink.fcgi?dbfrom=pmc&db=pubmed&id=' + pmcMatch[1] + '&retmode=json')
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        var ids = data.linksets && data.linksets[0] && data.linksets[0].linksetdbs && data.linksets[0].linksetdbs[0] && data.linksets[0].linksetdbs[0].links;
+        if (ids && ids.length) { setStep(2, 'done'); return String(ids[0]); }
+        throw new Error('Could not find PubMed record for this PMC article');
+      });
+  }
+
+  var doi = null;
+  var doiOrgMatch = url.match(/doi\.org\/(.+)/);
+  if (doiOrgMatch) doi = doiOrgMatch[1];
+  var doiPathMatch = url.match(/\/(10\.\d{4,}\/[^\s?#]+)/);
+  if (doiPathMatch) doi = doiPathMatch[1];
+
+  if (doi) {
+    doi = doi.replace(/[.,;]$/, '').split('?')[0].split('#')[0];
+    return fetch('https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&term=' + encodeURIComponent(doi) + '[doi]&retmode=json')
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (data.esearchresult && data.esearchresult.idlist && data.esearchresult.idlist.length) {
+          setStep(2, 'done');
+          return data.esearchresult.idlist[0];
+        }
+        throw new Error('Could not find PubMed record for this DOI');
+      });
+  }
+
+  var piiMatch = url.match(/article\/(S[\w()-]+)\//);
+  if (piiMatch) {
+    return fetch('https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&term=' + encodeURIComponent(piiMatch[1]) + '[pii]&retmode=json')
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (data.esearchresult && data.esearchresult.idlist && data.esearchresult.idlist.length) {
+          setStep(2, 'done');
+          return data.esearchresult.idlist[0];
+        }
+        throw new Error('Could not find PubMed record for this URL');
+      });
+  }
+
+  throw new Error('Could not find a PubMed record for this URL');
+}
+
+function fetchPaperDetails(pubmedId) {
+  setStep(3, 'active');
+  return Promise.all([
+    fetch('https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?db=pubmed&id=' + pubmedId + '&retmode=json').then(function(r) { return r.json(); }),
+    fetch('https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=pubmed&id=' + pubmedId + '&retmode=xml&rettype=abstract').then(function(r) { return r.text(); })
+  ]).then(function(results) {
+    var summaryData = results[0];
+    var xmlText = results[1];
+    var art = summaryData.result && summaryData.result[pubmedId];
+    var abstract = '';
+    var abstractMatches = xmlText && xmlText.match ? xmlText.match(/<AbstractText[^>]*>([\s\S]*?)<\/AbstractText>/g) : null;
+    if (abstractMatches) {
+      abstract = abstractMatches.map(function(block) {
+        var labelMatch = block.match(/Label="([^"]+)"/);
+        var textMatch = block.match(/<AbstractText[^>]*>([\s\S]*?)<\/AbstractText>/);
+        var label = labelMatch ? labelMatch[1] + ': ' : '';
+        var text = textMatch ? textMatch[1].replace(/<[^>]+>/g, '') : '';
+        return label + text;
+      }).join('\n\n');
+    }
+    var journal = (art && art.fulljournalname) || '';
+    var year = (art && art.pubdate) ? art.pubdate.split(' ')[0] : '';
+    var volume = (art && art.volume) || '';
+    var issue = (art && art.issue) ? '(' + art.issue + ')' : '';
+    var pages = (art && art.pages) || '';
+    var reference = (journal + ' ' + year + ';' + volume + issue + ':' + pages).trim();
+    setStep(3, 'done');
+    return {
+      title: (art && art.title) || '',
+      journal: journal,
+      pubdate: (art && art.pubdate) || '',
+      reference: reference,
+      abstract: abstract,
+      url: 'https://pubmed.ncbi.nlm.nih.gov/' + pubmedId + '/'
+    };
+  });
+}
+
+function generateSummary(paper) {
+  setStep(4, 'active');
+  var prompt = 'You are a clinical expert in anaesthesia and critical care. Given the following published paper, provide four things for a practising clinician:\n\n' +
+    '1. COMPREHENSIVE: A 5-6 sentence summary covering what was studied, the methodology, key findings, clinical relevance, and any important caveats or limitations.\n' +
+    '2. HEADLINE: A single sentence (max 25 words) capturing the most important clinical takeaway.\n' +
+    '3. SUBJECT: 2-4 words describing the subject area.\n' +
+    '4. CATEGORY: Choose all appropriate categories from this list: ' + CATEGORIES.join(', ') + '. Return as a JSON array.\n\n' +
+    'Respond in this exact JSON format with no other text:\n{"comprehensive":"...","headline":"...","subject":"...","category":["..."]}\n\n' +
+    'Title: ' + paper.title + '\nJournal: ' + paper.journal + '\nPublished: ' + paper.pubdate + '\nAbstract: ' + (paper.abstract || 'Not available');
+
+  return fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': API_KEY,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true'
+    },
+    body: JSON.stringify({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 800,
+      messages: [{ role: 'user', content: prompt }]
+    })
+  }).then(function(r) { return r.json(); })
+  .then(function(data) {
+    if (data.error) throw new Error(data.error.message);
+    var text = (data.content && data.content[0] && data.content[0].text) || '{}';
+    var summary = JSON.parse(text.replace(/```json|```/g, '').trim());
+    setStep(4, 'done');
+    return summary;
+  });
+}
+
+function exportToSheets(paper, summary) {
+  setStep(5, 'active');
+  var categoryFlags = {};
+  CATEGORIES.forEach(function(cat) {
+    categoryFlags[cat] = summary && Array.isArray(summary.category) && summary.category.indexOf(cat) !== -1 ? 'TRUE' : 'FALSE';
+  });
+
+  var payload = {
+    spreadsheetId: SPREADSHEET_ID,
+    subject: (summary && summary.subject) || '',
+    oss: (summary && summary.headline) || '',
+    fullSummary: (summary && summary.comprehensive) || '',
+    year: paper.pubdate ? paper.pubdate.split(' ')[0] : '',
+    title: paper.title,
+    reference: paper.reference,
+    url: paper.url,
+    date: new Date().toLocaleDateString(),
+    categoryFlags: categoryFlags
+  };
+
+  return fetch(SCRIPT_URL + '?action=export&payload=' + encodeURIComponent(JSON.stringify(payload)))
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (!data.success) throw new Error(data.error || 'Export failed');
+      setStep(5, 'done');
+    });
+}
+
+// ─── Main ─────────────────────────────────────────────────────
+var params = new URLSearchParams(window.location.search);
+var sharedUrl = params.get('url') || params.get('text') || '';
+
+if (!sharedUrl) {
+  showError('No URL was shared. Please try again from your browser share menu.');
+} else {
+  document.getElementById('urlBox').textContent = sharedUrl.length > 100
+    ? sharedUrl.substring(0, 100) + '...'
+    : sharedUrl;
+
+  loadConfig()
+    .then(function() { return resolveURLtoPubmedId(sharedUrl); })
+    .then(function(pubmedId) { return fetchPaperDetails(pubmedId); })
+    .then(function(paper) {
+      return generateSummary(paper).then(function(summary) {
+        return { paper: paper, summary: summary };
+      });
+    })
+    .then(function(result) {
+      return exportToSheets(result.paper, result.summary).then(function() {
+        return result.paper.title;
+      });
+    })
+    .then(function(title) {
+      showSuccess(title);
+    })
+    .catch(function(err) {
+      // Mark current active step as error
+      for (var i = 1; i <= 5; i++) {
+        if (document.getElementById('step' + i).className.indexOf('active') !== -1) {
+          setStep(i, 'error');
+        }
+      }
+      showError(err.message);
+    });
+}
+
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/Tribulator/sw.js');
+}
+</script>
+</body>
+</html>
