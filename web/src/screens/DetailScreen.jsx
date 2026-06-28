@@ -110,7 +110,7 @@ export default function DetailScreen() {
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, marginBottom: 8 }}>
         <h1 style={{ flex: 1, fontSize: 19, fontWeight: 700, lineHeight: 1.4, margin: 0 }}>{trial.title}</h1>
         <button type="button" onClick={toggleSave} aria-label="Save to library" style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4 }}>
-          <BookmarkIcon filled={!!savedPaper} width={26} height={26} style={{ color: savedPaper ? 'var(--navy)' : 'var(--text-muted)' }} />
+          <BookmarkIcon filled={!!savedPaper} width={26} height={26} style={{ color: savedPaper ? 'var(--teal)' : 'var(--muted)' }} />
         </button>
       </div>
 
@@ -194,28 +194,28 @@ export default function DetailScreen() {
       {aiSummary && (
         <div>
           <div className="card section" style={{ background: '#f3eefb' }}>
-            <p style={{ fontSize: 10, fontWeight: 800, letterSpacing: 1, color: 'var(--text-muted)', margin: '0 0 6px' }}>SUBJECT AREA</p>
+            <p style={{ fontSize: 10, fontWeight: 800, letterSpacing: 1, color: 'var(--muted)', margin: '0 0 6px' }}>SUBJECT AREA</p>
             <p style={{ margin: 0, fontWeight: 600, color: '#6a3fa0' }}>{aiSummary.subject}</p>
           </div>
 
           <div className="card section" style={{ background: 'var(--success-soft)' }}>
-            <p style={{ fontSize: 10, fontWeight: 800, letterSpacing: 1, color: 'var(--text-muted)', margin: '0 0 6px' }}>ONE SENTENCE SUMMARY</p>
+            <p style={{ fontSize: 10, fontWeight: 800, letterSpacing: 1, color: 'var(--muted)', margin: '0 0 6px' }}>ONE SENTENCE SUMMARY</p>
             <p style={{ margin: 0, fontWeight: 600, color: '#176b4d' }}>{aiSummary.oneLineSummary}</p>
           </div>
 
           {aiSummary.tags?.length > 0 && (
             <div className="chips section">
               {aiSummary.tags.map((tag, i) => (
-                <span key={i} className="badge" style={{ color: 'var(--accent)', borderColor: 'var(--accent)', background: 'var(--accent-soft)' }}>
+                <span key={i} className="badge" style={{ color: 'var(--teal)', borderColor: 'var(--teal)', background: 'var(--pale)' }}>
                   {tag}
                 </span>
               ))}
             </div>
           )}
 
-          <div className="card section" style={{ background: 'var(--accent-soft)' }}>
-            <p style={{ fontSize: 10, fontWeight: 800, letterSpacing: 1, color: 'var(--text-muted)', margin: '0 0 6px' }}>FULL SUMMARY</p>
-            <p style={{ margin: 0, lineHeight: 1.6, color: '#1c4564' }}>{aiSummary.fullSummary}</p>
+          <div className="card section" style={{ background: 'var(--pale)' }}>
+            <p style={{ fontSize: 10, fontWeight: 800, letterSpacing: 1, color: 'var(--muted)', margin: '0 0 6px' }}>FULL SUMMARY</p>
+            <p style={{ margin: 0, lineHeight: 1.6, color: 'var(--teal)' }}>{aiSummary.fullSummary}</p>
           </div>
 
           {isAiEnabled() && (

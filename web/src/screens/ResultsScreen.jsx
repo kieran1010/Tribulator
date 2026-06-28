@@ -66,7 +66,7 @@ export default function ResultsScreen() {
       {results.map(item => (
         <div
           key={item.id}
-          className="card section"
+          className="card"
           style={{ cursor: 'pointer' }}
           onClick={() => navigate('/detail', { state: { trial: item } })}
         >

@@ -1,4 +1,5 @@
-import { HashRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
+import { useRef } from 'react';
+import { HashRouter, Routes, Route, Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import Header from './components/Header';
 import BottomNav from './components/BottomNav';
 import SearchScreen from './screens/SearchScreen';
@@ -7,11 +8,41 @@ import DetailScreen from './screens/DetailScreen';
 import SavedScreen from './screens/SavedScreen';
 import SettingsScreen from './screens/SettingsScreen';
 
+const TAB_ORDER = ['/search', '/saved', '/settings'];
+const SWIPE_MIN_DISTANCE = 60;
+
 function Layout() {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const touchStart = useRef(null);
+
+  const handleTouchStart = e => {
+    const t = e.touches[0];
+    touchStart.current = { x: t.clientX, y: t.clientY };
+  };
+
+  const handleTouchEnd = e => {
+    const start = touchStart.current;
+    touchStart.current = null;
+    if (!start) return;
+
+    const tabIndex = TAB_ORDER.indexOf(location.pathname);
+    if (tabIndex === -1) return;
+
+    const t = e.changedTouches[0];
+    const deltaX = t.clientX - start.x;
+    const deltaY = t.clientY - start.y;
+    if (Math.abs(deltaX) < SWIPE_MIN_DISTANCE || Math.abs(deltaX) < Math.abs(deltaY) * 1.5) return;
+
+    const nextIndex = deltaX < 0 ? tabIndex + 1 : tabIndex - 1;
+    if (nextIndex < 0 || nextIndex >= TAB_ORDER.length) return;
+    navigate(TAB_ORDER[nextIndex]);
+  };
+
   return (
     <div className="app-shell">
       <Header />
-      <main className="app-main">
+      <main className="app-main" onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
         <Outlet />
       </main>
       <BottomNav />

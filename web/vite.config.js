@@ -13,8 +13,8 @@ export default defineConfig({
         name: 'Tribulator',
         short_name: 'Tribulator',
         description: 'Search, filter, save and AI-summarise anaesthesia & critical care literature.',
-        theme_color: '#0b2238',
-        background_color: '#0b2238',
+        theme_color: '#0f3557',
+        background_color: '#f4f7fa',
         display: 'standalone',
         start_url: '/',
         icons: [

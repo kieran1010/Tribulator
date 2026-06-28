@@ -38,7 +38,7 @@ export default function SavedScreen() {
   return (
     <div>
       <div className="section" style={{ position: 'relative' }}>
-        <SearchIcon width={16} height={16} style={{ position: 'absolute', left: 14, top: 14, color: 'var(--text-muted)' }} />
+        <SearchIcon width={16} height={16} style={{ position: 'absolute', left: 14, top: 14, color: 'var(--muted)' }} />
         <input
           type="text"
           placeholder="Search saved papers..."
@@ -50,7 +50,7 @@ export default function SavedScreen() {
           <button
             type="button"
             onClick={() => setQuery('')}
-            style={{ position: 'absolute', right: 10, top: 10, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}
+            style={{ position: 'absolute', right: 10, top: 10, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted)' }}
           >
             <XIcon width={16} height={16} />
           </button>
@@ -72,7 +72,7 @@ export default function SavedScreen() {
       {filtered.map(item => {
         const expanded = expandedId === item.id;
         return (
-          <div key={item.id} className="card section" style={{ cursor: 'pointer' }} onClick={() => setExpandedId(expanded ? null : item.id)}>
+          <div key={item.id} className="card" style={{ cursor: 'pointer' }} onClick={() => setExpandedId(expanded ? null : item.id)}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
               <span className="hint">{item.year}</span>
               <button
@@ -89,7 +89,7 @@ export default function SavedScreen() {
             {item.tags?.length > 0 && (
               <div className="chips" style={{ marginBottom: 6 }}>
                 {item.tags.map((tag, i) => (
-                  <span key={i} className="badge" style={{ color: 'var(--accent)', borderColor: 'var(--accent)', background: 'var(--accent-soft)' }}>
+                  <span key={i} className="badge" style={{ color: 'var(--teal)', borderColor: 'var(--teal)', background: 'var(--pale)' }}>
                     {tag}
                   </span>
                 ))}
@@ -111,7 +111,7 @@ export default function SavedScreen() {
             )}
 
             <div style={{ textAlign: 'right', marginTop: 4 }}>
-              <ChevronDown width={14} height={14} style={{ transform: expanded ? 'rotate(180deg)' : 'none', color: 'var(--text-muted)' }} />
+              <ChevronDown width={14} height={14} style={{ transform: expanded ? 'rotate(180deg)' : 'none', color: 'var(--muted)' }} />
             </div>
           </div>
         );

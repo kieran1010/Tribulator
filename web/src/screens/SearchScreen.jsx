@@ -26,7 +26,7 @@ export default function SearchScreen() {
         <SearchIcon
           width={18}
           height={18}
-          style={{ position: 'absolute', left: 14, top: 14, color: 'var(--text-muted)' }}
+          style={{ position: 'absolute', left: 14, top: 14, color: 'var(--muted)' }}
         />
         <input
           type="text"
