@@ -3,41 +3,32 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
+
 import SearchScreen from './screens/SearchScreen';
 import ResultsScreen from './screens/ResultsScreen';
 import DetailScreen from './screens/DetailScreen';
-import BookmarksScreen from './screens/BookmarksScreen';
+import SavedScreen from './screens/SavedScreen';
 import SettingsScreen from './screens/SettingsScreen';
 import ImpactFactorsScreen from './screens/ImpactFactorsScreen';
-import AddScreen from './screens/AddScreen';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
 
-function AddStack() {
-  return (
-    <Stack.Navigator>
-      <Stack.Screen name="AddHome" component={AddScreen} options={{ headerShown: false }} />
-      <Stack.Screen name="AddDetail" component={DetailScreen} options={{ title: 'Paper Details' }} />
-    </Stack.Navigator>
-  );
-}
-
 function SearchStack() {
   return (
     <Stack.Navigator>
-      <Stack.Screen name="SearchHome" component={SearchScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="Search" component={SearchScreen} options={{ title: 'Tribulator' }} />
       <Stack.Screen name="Results" component={ResultsScreen} options={{ title: 'Results' }} />
       <Stack.Screen name="Detail" component={DetailScreen} options={{ title: 'Trial Detail' }} />
     </Stack.Navigator>
   );
 }
 
-function BookmarksStack() {
+function SavedStack() {
   return (
     <Stack.Navigator>
-      <Stack.Screen name="BookmarksHome" component={BookmarksScreen} options={{ title: 'Saved Trials' }} />
-      <Stack.Screen name="BookmarkDetail" component={DetailScreen} options={{ title: 'Trial Detail' }} />
+      <Stack.Screen name="Saved" component={SavedScreen} options={{ title: 'Saved Trials' }} />
+      <Stack.Screen name="SavedDetail" component={DetailScreen} options={{ title: 'Trial Detail' }} />
     </Stack.Navigator>
   );
 }
@@ -45,7 +36,7 @@ function BookmarksStack() {
 function SettingsStack() {
   return (
     <Stack.Navigator>
-      <Stack.Screen name="SettingsHome" component={SettingsScreen} options={{ title: 'Settings' }} />
+      <Stack.Screen name="Settings" component={SettingsScreen} options={{ title: 'Settings' }} />
       <Stack.Screen name="ImpactFactors" component={ImpactFactorsScreen} options={{ title: 'Journal Impact Factors' }} />
     </Stack.Navigator>
   );
@@ -58,7 +49,11 @@ export default function App() {
       <Tab.Navigator
         screenOptions={({ route }) => ({
           tabBarIcon: ({ color, size }) => {
-            const icons = { Search: 'search', Add: 'add-circle', Saved: 'bookmark', Settings: 'settings-outline' };
+            const icons = {
+              Search: 'search',
+              Saved: 'bookmark',
+              Settings: 'settings-outline',
+            };
             return <Ionicons name={icons[route.name]} size={size} color={color} />;
           },
           tabBarActiveTintColor: '#0066CC',
@@ -67,8 +62,7 @@ export default function App() {
         })}
       >
         <Tab.Screen name="Search" component={SearchStack} />
-        <Tab.Screen name="Add" component={AddStack} />
-        <Tab.Screen name="Saved" component={BookmarksStack} />
+        <Tab.Screen name="Saved" component={SavedStack} />
         <Tab.Screen name="Settings" component={SettingsStack} />
       </Tab.Navigator>
     </NavigationContainer>
