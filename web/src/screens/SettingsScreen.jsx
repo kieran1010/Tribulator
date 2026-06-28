@@ -1,93 +1,89 @@
-import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { SETTINGS_KEYS, getSetting, setSetting, clearBookmarks } from '../lib/storage';
-import { loadBootstrapConfig } from '../lib/sheetsApi';
-import { CloudDownIcon, CheckCircleIcon, ChevronRight, TrashIcon } from '../components/Icon';
+import { useState, useEffect, useRef } from 'react';
+import { SETTINGS_KEYS, getSetting, setSetting } from '../lib/storage';
+import { exportLibraryToFile, importLibraryFromFile } from '../lib/backup';
+import { CloudDownIcon, CloudUpIcon, CheckCircleIcon } from '../components/Icon';
 
 export default function SettingsScreen() {
-  const navigate = useNavigate();
+  const [aiEnabled, setAiEnabled] = useState(false);
   const [apiKey, setApiKey] = useState('');
-  const [webhookUrl, setWebhookUrl] = useState('');
-  const [spreadsheetId, setSpreadsheetId] = useState('');
   const [saved, setSaved] = useState(false);
-  const [loadingConfig, setLoadingConfig] = useState(false);
-  const [configNotice, setConfigNotice] = useState(null);
+  const [exporting, setExporting] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [notice, setNotice] = useState(null);
+  const fileInputRef = useRef(null);
 
   useEffect(() => {
+    setAiEnabled(getSetting(SETTINGS_KEYS.AI_ENABLED) === 'true');
     setApiKey(getSetting(SETTINGS_KEYS.API_KEY) || '');
-    setWebhookUrl(getSetting(SETTINGS_KEYS.WEBHOOK_URL) || '');
-    setSpreadsheetId(getSetting(SETTINGS_KEYS.SPREADSHEET_ID) || '');
   }, []);
 
   const handleSave = () => {
+    setSetting(SETTINGS_KEYS.AI_ENABLED, aiEnabled ? 'true' : 'false');
     setSetting(SETTINGS_KEYS.API_KEY, apiKey.trim());
-    setSetting(SETTINGS_KEYS.WEBHOOK_URL, webhookUrl.trim());
-    setSetting(SETTINGS_KEYS.SPREADSHEET_ID, spreadsheetId.trim());
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
   };
 
-  const handleLoadFromSpreadsheet = async () => {
-    setLoadingConfig(true);
-    setConfigNotice(null);
+  const handleExport = async () => {
+    setExporting(true);
+    setNotice(null);
     try {
-      const data = await loadBootstrapConfig();
-      if (data.apiKey) { setApiKey(data.apiKey); setSetting(SETTINGS_KEYS.API_KEY, data.apiKey); }
-      if (data.webhookUrl) { setWebhookUrl(data.webhookUrl); setSetting(SETTINGS_KEYS.WEBHOOK_URL, data.webhookUrl); }
-      if (data.spreadsheetId) { setSpreadsheetId(data.spreadsheetId); setSetting(SETTINGS_KEYS.SPREADSHEET_ID, data.spreadsheetId); }
-      setConfigNotice({ type: 'success', text: 'Settings updated from config spreadsheet.' });
+      const count = await exportLibraryToFile();
+      setNotice({ type: 'success', text: `Exported ${count} paper${count !== 1 ? 's' : ''}.` });
     } catch (e) {
-      setConfigNotice({ type: 'error', text: e.message });
+      setNotice({ type: 'error', text: 'Export failed: ' + e.message });
     } finally {
-      setLoadingConfig(false);
+      setExporting(false);
     }
   };
 
-  const handleClearBookmarks = () => {
-    if (!confirm('This will permanently delete all saved papers. Are you sure?')) return;
-    clearBookmarks();
-    alert('All bookmarks cleared.');
+  const handleImportFile = async e => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setImporting(true);
+    setNotice(null);
+    try {
+      const { imported, skipped } = await importLibraryFromFile(file);
+      setNotice({ type: 'success', text: `Imported ${imported}, skipped ${skipped} duplicate${skipped !== 1 ? 's' : ''}.` });
+    } catch (e) {
+      setNotice({ type: 'error', text: 'Import failed: ' + e.message });
+    } finally {
+      setImporting(false);
+    }
   };
 
   return (
     <div>
-      <button type="button" className="btn btn-primary section" onClick={handleLoadFromSpreadsheet} disabled={loadingConfig}>
-        {loadingConfig ? <span className="spinner" /> : <CloudDownIcon width={18} height={18} />}
-        {loadingConfig ? 'Loading...' : 'Load Config from Spreadsheet'}
-      </button>
-      {configNotice && (
-        <p className={configNotice.type === 'error' ? 'error-text' : 'hint'} style={{ marginBottom: 16 }}>{configNotice.text}</p>
+      <p className="section-title" style={{ color: 'var(--navy)' }}>🤖 AI Features</p>
+
+      <div className="card section switch-row">
+        <div>
+          <p className="section-title" style={{ marginBottom: 2 }}>Enable AI features</p>
+          <p className="hint">AI summary &amp; tag generation via the Anthropic API</p>
+        </div>
+        <button
+          type="button"
+          className={'switch' + (aiEnabled ? ' on' : '')}
+          onClick={() => setAiEnabled(v => !v)}
+          aria-label="Enable AI features"
+        >
+          <span className="switch-knob" />
+        </button>
+      </div>
+
+      {aiEnabled && (
+        <div className="section">
+          <input
+            type="password"
+            placeholder="sk-ant-..."
+            value={apiKey}
+            onChange={e => setApiKey(e.target.value)}
+            autoCapitalize="none"
+          />
+          <p className="hint">Your Anthropic API key, stored locally on this device.</p>
+        </div>
       )}
-
-      <p className="section-title" style={{ color: 'var(--navy)' }}>🔑 Anthropic API Key</p>
-      <input
-        type="password"
-        placeholder="sk-ant-..."
-        value={apiKey}
-        onChange={e => setApiKey(e.target.value)}
-        autoCapitalize="none"
-        className="section"
-      />
-
-      <p className="section-title" style={{ color: 'var(--navy)' }}>📡 Apps Script Webhook URL</p>
-      <input
-        type="text"
-        placeholder="https://script.google.com/macros/s/..."
-        value={webhookUrl}
-        onChange={e => setWebhookUrl(e.target.value)}
-        autoCapitalize="none"
-        className="section"
-      />
-
-      <p className="section-title" style={{ color: 'var(--navy)' }}>📊 Google Spreadsheet ID</p>
-      <input
-        type="text"
-        placeholder="1wJZmg..."
-        value={spreadsheetId}
-        onChange={e => setSpreadsheetId(e.target.value)}
-        autoCapitalize="none"
-        className="section"
-      />
 
       <button type="button" className="btn btn-primary" onClick={handleSave}>
         {saved ? <CheckCircleIcon width={18} height={18} /> : null}
@@ -96,34 +92,22 @@ export default function SettingsScreen() {
 
       <div className="divider" />
 
-      <p className="section-title" style={{ color: 'var(--navy)' }}>📈 Journal Impact Factors</p>
-      <button
-        type="button"
-        className="card"
-        onClick={() => navigate('/settings/impact-factors')}
-        style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', textAlign: 'left' }}
-      >
-        <span style={{ flex: 1, fontWeight: 600, color: 'var(--navy)' }}>Edit Journal Impact Factors</span>
-        <ChevronRight width={16} height={16} style={{ color: 'var(--text-muted)' }} />
+      <p className="section-title" style={{ color: 'var(--navy)' }}>📁 Data</p>
+
+      <button type="button" className="btn btn-outline section" onClick={handleExport} disabled={exporting}>
+        {exporting ? <span className="spinner" /> : <CloudDownIcon width={18} height={18} />}
+        Export Library
       </button>
 
-      <div className="divider" />
-
-      <p className="section-title" style={{ color: 'var(--navy)' }}>🗑 Data</p>
-      <button type="button" className="btn btn-danger" onClick={handleClearBookmarks}>
-        <TrashIcon width={18} height={18} />
-        Clear All Bookmarks
+      <button type="button" className="btn btn-outline" onClick={() => fileInputRef.current?.click()} disabled={importing}>
+        {importing ? <span className="spinner" /> : <CloudUpIcon width={18} height={18} />}
+        Import Library
       </button>
+      <input ref={fileInputRef} type="file" accept="application/json" onChange={handleImportFile} style={{ display: 'none' }} />
 
-      <div className="divider" />
-
-      <div className="card" style={{ textAlign: 'center', background: 'var(--bg)' }}>
-        <p style={{ fontWeight: 700, margin: '0 0 4px' }}>Tribulator</p>
-        <p className="hint">Version 2.0 (Web)</p>
-        <p className="hint">Clinical trial search &amp; summarisation</p>
-        <p className="hint">for anaesthesia &amp; critical care</p>
-        <p className="hint">Kieran Gillick</p>
-      </div>
+      {notice && (
+        <p className={notice.type === 'error' ? 'error-text' : 'hint'} style={{ marginTop: 12 }}>{notice.text}</p>
+      )}
     </div>
   );
 }

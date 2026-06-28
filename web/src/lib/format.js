@@ -1,5 +1,4 @@
-import { JOURNAL_QUARTILES, DEFAULT_IMPACT_FACTORS } from './constants';
-import { SETTINGS_KEYS, getSetting } from './storage';
+import { JOURNAL_QUARTILES } from './constants';
 
 export function decodeHtmlEntities(text) {
   if (!text) return text;
@@ -32,29 +31,6 @@ export function getJournalQuartile(journalName) {
   if (JOURNAL_QUARTILES[key] !== undefined) return JOURNAL_QUARTILES[key];
   for (const [name, q] of Object.entries(JOURNAL_QUARTILES)) {
     if (key.includes(name) || name.includes(key)) return q;
-  }
-  return null;
-}
-
-export function getImpactFactor(journalName) {
-  if (!journalName) return null;
-  const key = journalName.toLowerCase().trim();
-
-  const customIF = getSetting(SETTINGS_KEYS.IMPACT_FACTORS);
-  if (customIF) {
-    const lines = customIF.split('\n');
-    for (const line of lines) {
-      const [name, value] = line.split('=').map(s => s.trim().toLowerCase());
-      if (name && value && (key.includes(name) || name.includes(key))) {
-        const parsed = parseFloat(value);
-        if (!isNaN(parsed)) return parsed;
-      }
-    }
-  }
-
-  if (DEFAULT_IMPACT_FACTORS[key] !== undefined) return DEFAULT_IMPACT_FACTORS[key];
-  for (const [name, value] of Object.entries(DEFAULT_IMPACT_FACTORS)) {
-    if (key.includes(name) || name.includes(key)) return value;
   }
   return null;
 }

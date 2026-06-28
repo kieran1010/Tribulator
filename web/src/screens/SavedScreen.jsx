@@ -1,61 +1,39 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { loadBookmarks, saveBookmarks } from '../lib/storage';
-import { backupBookmarks, restoreBookmarks } from '../lib/sheetsApi';
-import { SearchIcon, TrashIcon, CloudUpIcon, CloudDownIcon, BookmarkIcon, XIcon } from '../components/Icon';
+import { getAllPapers, deletePaper } from '../lib/db';
+import { SearchIcon, TrashIcon, BookmarkIcon, XIcon, ChevronDown, ExternalLinkIcon } from '../components/Icon';
 
 export default function SavedScreen() {
-  const navigate = useNavigate();
-  const [bookmarks, setBookmarks] = useState([]);
+  const [papers, setPapers] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState('');
-  const [backing, setBacking] = useState(false);
-  const [restoring, setRestoring] = useState(false);
-  const [notice, setNotice] = useState(null);
+  const [expandedId, setExpandedId] = useState(null);
 
   useEffect(() => {
-    const sorted = [...loadBookmarks()].sort((a, b) => new Date(b.dateAdded || 0) - new Date(a.dateAdded || 0));
-    setBookmarks(sorted);
+    (async () => {
+      const all = await getAllPapers();
+      all.sort((a, b) => new Date(b.dateEntered || 0) - new Date(a.dateEntered || 0));
+      setPapers(all);
+      setLoading(false);
+    })();
   }, []);
 
-  const handleDelete = id => {
-    if (!confirm('Remove this paper from saved trials?')) return;
-    const updated = bookmarks.filter(b => b.id !== id);
-    setBookmarks(updated);
-    saveBookmarks(updated);
-  };
-
-  const handleBackup = async () => {
-    setBacking(true);
-    setNotice(null);
-    try {
-      await backupBookmarks(bookmarks);
-      setNotice({ type: 'success', text: `${bookmarks.length} papers backed up to Google Sheets.` });
-    } catch (e) {
-      setNotice({ type: 'error', text: 'Backup failed: ' + e.message });
-    } finally {
-      setBacking(false);
-    }
-  };
-
-  const handleRestore = async () => {
-    if (!confirm('This will replace your current saved papers with the backup. Continue?')) return;
-    setRestoring(true);
-    setNotice(null);
-    try {
-      const restored = await restoreBookmarks();
-      setBookmarks(restored);
-      saveBookmarks(restored);
-      setNotice({ type: 'success', text: `${restored.length} papers restored.` });
-    } catch (e) {
-      setNotice({ type: 'error', text: 'Restore failed: ' + e.message });
-    } finally {
-      setRestoring(false);
-    }
+  const handleDelete = async id => {
+    if (!confirm('Remove this paper from your library?')) return;
+    await deletePaper(id);
+    setPapers(prev => prev.filter(p => p.id !== id));
   };
 
   const filtered = query.trim()
-    ? bookmarks.filter(b => [b.title, b.journal, b.pubdate, ...(b.keywords || [])].join(' ').toLowerCase().includes(query.toLowerCase()))
-    : bookmarks;
+    ? papers.filter(p => [p.title, p.reference, p.subject, ...(p.tags || [])].join(' ').toLowerCase().includes(query.toLowerCase()))
+    : papers;
+
+  if (loading) {
+    return (
+      <div className="empty-state">
+        <div className="spinner" style={{ margin: '0 auto' }} />
+      </div>
+    );
+  }
 
   return (
     <div>
@@ -79,23 +57,8 @@ export default function SavedScreen() {
         )}
       </div>
 
-      <div className="section" style={{ display: 'flex', gap: 8 }}>
-        <button type="button" className="btn btn-outline" onClick={handleBackup} disabled={backing} style={{ width: 'auto', flex: 1 }}>
-          {backing ? <span className="spinner" /> : <CloudUpIcon width={16} height={16} />}
-          Backup
-        </button>
-        <button type="button" className="btn btn-outline" onClick={handleRestore} disabled={restoring} style={{ width: 'auto', flex: 1 }}>
-          {restoring ? <span className="spinner" /> : <CloudDownIcon width={16} height={16} />}
-          Restore
-        </button>
-      </div>
-
-      {notice && (
-        <p className={notice.type === 'error' ? 'error-text' : 'hint'} style={{ marginBottom: 12 }}>{notice.text}</p>
-      )}
-
       <p className="hint" style={{ marginBottom: 12 }}>
-        {filtered.length} of {bookmarks.length} saved paper{bookmarks.length !== 1 ? 's' : ''}
+        {filtered.length} of {papers.length} saved paper{papers.length !== 1 ? 's' : ''}
       </p>
 
       {filtered.length === 0 && (
@@ -106,28 +69,53 @@ export default function SavedScreen() {
         </div>
       )}
 
-      {filtered.map(item => (
-        <div key={item.id} className="card section" style={{ cursor: 'pointer' }} onClick={() => navigate('/detail', { state: { trial: item } })}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-            <span className="hint">{item.pubdate}</span>
-            <button
-              type="button"
-              onClick={e => { e.stopPropagation(); handleDelete(item.id); }}
-              style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--border)' }}
-            >
-              <TrashIcon width={16} height={16} />
-            </button>
-          </div>
-          <p style={{ fontWeight: 600, margin: '0 0 4px', lineHeight: 1.4 }}>{item.title}</p>
-          <p className="hint" style={{ fontStyle: 'italic', margin: '0 0 6px' }}>{item.journal}</p>
-          {item.keywords?.length > 0 && (
-            <div className="chips" style={{ marginBottom: 6 }}>
-              {item.keywords.slice(0, 3).map((kw, i) => <span key={i} className="keyword">{kw}</span>)}
+      {filtered.map(item => {
+        const expanded = expandedId === item.id;
+        return (
+          <div key={item.id} className="card section" style={{ cursor: 'pointer' }} onClick={() => setExpandedId(expanded ? null : item.id)}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+              <span className="hint">{item.year}</span>
+              <button
+                type="button"
+                onClick={e => { e.stopPropagation(); handleDelete(item.id); }}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--border)' }}
+              >
+                <TrashIcon width={16} height={16} />
+              </button>
             </div>
-          )}
-          {item.dateAdded && <p className="hint">Added {new Date(item.dateAdded).toLocaleDateString()}</p>}
-        </div>
-      ))}
+            <p style={{ fontWeight: 600, margin: '0 0 4px', lineHeight: 1.4 }}>{item.title}</p>
+            <p className="hint" style={{ fontStyle: 'italic', margin: '0 0 6px' }}>{item.reference}</p>
+            {item.oneLineSummary && <p style={{ margin: '0 0 6px', fontWeight: 500 }}>{item.oneLineSummary}</p>}
+            {item.tags?.length > 0 && (
+              <div className="chips" style={{ marginBottom: 6 }}>
+                {item.tags.map((tag, i) => (
+                  <span key={i} className="badge" style={{ color: 'var(--accent)', borderColor: 'var(--accent)', background: 'var(--accent-soft)' }}>
+                    {tag}
+                  </span>
+                ))}
+              </div>
+            )}
+
+            {expanded && (
+              <div onClick={e => e.stopPropagation()}>
+                <div className="divider" />
+                {item.fullSummary && <p style={{ margin: '0 0 10px', lineHeight: 1.6 }}>{item.fullSummary}</p>}
+                {item.abstract && <p className="hint" style={{ lineHeight: 1.6, margin: '0 0 10px' }}>{item.abstract}</p>}
+                {item.url && (
+                  <a href={item.url} target="_blank" rel="noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                    <ExternalLinkIcon width={14} height={14} />
+                    View on PubMed
+                  </a>
+                )}
+              </div>
+            )}
+
+            <div style={{ textAlign: 'right', marginTop: 4 }}>
+              <ChevronDown width={14} height={14} style={{ transform: expanded ? 'rotate(180deg)' : 'none', color: 'var(--text-muted)' }} />
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }

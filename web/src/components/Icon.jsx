@@ -35,14 +35,6 @@ export function GearIcon(props) {
   );
 }
 
-export function ChevronRight(props) {
-  return (
-    <svg {...base} {...props}>
-      <polyline points="9 18 15 12 9 6" />
-    </svg>
-  );
-}
-
 export function ChevronDown(props) {
   return (
     <svg {...base} {...props}>
@@ -108,15 +100,6 @@ export function XIcon(props) {
   );
 }
 
-export function PlusIcon(props) {
-  return (
-    <svg {...base} {...props}>
-      <line x1="12" y1="5" x2="12" y2="19" />
-      <line x1="5" y1="12" x2="19" y2="12" />
-    </svg>
-  );
-}
-
 export function SparklesIcon(props) {
   return (
     <svg {...base} {...props}>
@@ -125,11 +108,3 @@ export function SparklesIcon(props) {
   );
 }
 
-export function ArrowLeftIcon(props) {
-  return (
-    <svg {...base} {...props}>
-      <line x1="19" y1="12" x2="5" y2="12" />
-      <polyline points="12 19 5 12 12 5" />
-    </svg>
-  );
-}

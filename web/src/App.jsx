@@ -6,7 +6,6 @@ import ResultsScreen from './screens/ResultsScreen';
 import DetailScreen from './screens/DetailScreen';
 import SavedScreen from './screens/SavedScreen';
 import SettingsScreen from './screens/SettingsScreen';
-import ImpactFactorsScreen from './screens/ImpactFactorsScreen';
 
 function Layout() {
   return (
@@ -31,7 +30,6 @@ export default function App() {
           <Route path="/detail" element={<DetailScreen />} />
           <Route path="/saved" element={<SavedScreen />} />
           <Route path="/settings" element={<SettingsScreen />} />
-          <Route path="/settings/impact-factors" element={<ImpactFactorsScreen />} />
           <Route path="*" element={<Navigate to="/search" replace />} />
         </Route>
       </Routes>

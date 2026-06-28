@@ -2,10 +2,10 @@ import { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { fetchFullDetails } from '../lib/pubmedApi';
 import { fetchAISummary } from '../lib/aiApi';
-import { exportToSheets } from '../lib/sheetsApi';
 import { buildVancouverReference } from '../lib/format';
-import { loadBookmarks, saveBookmarks } from '../lib/storage';
-import { BookmarkIcon, ExternalLinkIcon, SparklesIcon, CheckCircleIcon, ChevronDown } from '../components/Icon';
+import { isAiEnabled } from '../lib/storage';
+import { getAllPapers, addPaper, putPaper, deletePaper, findMatchingPaper } from '../lib/db';
+import { BookmarkIcon, ExternalLinkIcon, SparklesIcon, ChevronDown } from '../components/Icon';
 
 const QUARTILE_VAR = { Q1: 'var(--q1)', Q2: 'var(--q2)', Q3: 'var(--q3)', Q4: 'var(--q4)' };
 
@@ -16,69 +16,89 @@ export default function DetailScreen() {
 
   const [details, setDetails] = useState(null);
   const [detailsLoading, setDetailsLoading] = useState(true);
-  const [bookmarked, setBookmarked] = useState(false);
+  const [savedPaper, setSavedPaper] = useState(null);
   const [abstractExpanded, setAbstractExpanded] = useState(false);
 
   const [aiSummary, setAiSummary] = useState(null);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState(null);
 
-  const [exporting, setExporting] = useState(false);
-  const [exported, setExported] = useState(false);
-  const [exportError, setExportError] = useState(null);
-
   useEffect(() => {
     if (!trial) {
       navigate('/search', { replace: true });
       return;
     }
+    let cancelled = false;
     (async () => {
+      let fetchedDetails = {};
       try {
-        setDetails(await fetchFullDetails(trial.pubmedId));
+        fetchedDetails = await fetchFullDetails(trial.pubmedId);
       } catch {
-        setDetails({});
-      } finally {
-        setDetailsLoading(false);
+        fetchedDetails = {};
       }
-      setBookmarked(loadBookmarks().some(b => b.id === trial.id));
+      if (cancelled) return;
+      setDetails(fetchedDetails);
+      setDetailsLoading(false);
+
+      const url = `https://pubmed.ncbi.nlm.nih.gov/${trial.pubmedId}/`;
+      const papers = await getAllPapers();
+      if (cancelled) return;
+      const match = findMatchingPaper(papers, { url });
+      if (match) {
+        setSavedPaper(match);
+        if (match.oneLineSummary || match.fullSummary || match.subject) {
+          setAiSummary({
+            subject: match.subject,
+            oneLineSummary: match.oneLineSummary,
+            fullSummary: match.fullSummary,
+            tags: match.tags || [],
+          });
+        }
+      }
     })();
+    return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [trial?.id]);
 
   if (!trial) return null;
 
-  const toggleBookmark = () => {
-    const bookmarks = loadBookmarks();
-    const updated = bookmarked
-      ? bookmarks.filter(b => b.id !== trial.id)
-      : [...bookmarks, { ...trial, dateAdded: new Date().toISOString() }];
-    saveBookmarks(updated);
-    setBookmarked(!bookmarked);
+  const toggleSave = async () => {
+    if (savedPaper) {
+      await deletePaper(savedPaper.id);
+      setSavedPaper(null);
+      return;
+    }
+    const paper = {
+      title: trial.title,
+      reference: buildVancouverReference(trial, details || {}),
+      url: `https://pubmed.ncbi.nlm.nih.gov/${trial.pubmedId}/`,
+      year: trial.pubdate ? trial.pubdate.split(' ')[0] : '',
+      subject: aiSummary?.subject || '',
+      abstract: details?.abstract || '',
+      dateEntered: new Date().toISOString(),
+      oneLineSummary: aiSummary?.oneLineSummary || '',
+      fullSummary: aiSummary?.fullSummary || '',
+      tags: aiSummary?.tags || [],
+    };
+    const id = await addPaper(paper);
+    setSavedPaper({ ...paper, id });
   };
 
   const handleSummarise = async () => {
     setAiLoading(true);
     setAiError(null);
     try {
-      setAiSummary(await fetchAISummary(trial, details?.abstract));
+      const summary = await fetchAISummary(trial, details?.abstract);
+      setAiSummary(summary);
+      if (savedPaper) {
+        const updated = { ...savedPaper, ...summary };
+        await putPaper(updated);
+        setSavedPaper(updated);
+      }
     } catch (e) {
       setAiError('Failed to generate summary: ' + e.message);
     } finally {
       setAiLoading(false);
-    }
-  };
-
-  const handleExport = async () => {
-    if (exporting || !aiSummary) return;
-    setExporting(true);
-    setExportError(null);
-    try {
-      await exportToSheets(trial, details, aiSummary);
-      setExported(true);
-    } catch (e) {
-      setExportError('Export failed: ' + e.message);
-    } finally {
-      setExporting(false);
     }
   };
 
@@ -89,8 +109,8 @@ export default function DetailScreen() {
     <div>
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, marginBottom: 8 }}>
         <h1 style={{ flex: 1, fontSize: 19, fontWeight: 700, lineHeight: 1.4, margin: 0 }}>{trial.title}</h1>
-        <button type="button" onClick={toggleBookmark} aria-label="Bookmark" style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4 }}>
-          <BookmarkIcon filled={bookmarked} width={26} height={26} style={{ color: bookmarked ? 'var(--navy)' : 'var(--text-muted)' }} />
+        <button type="button" onClick={toggleSave} aria-label="Save to library" style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4 }}>
+          <BookmarkIcon filled={!!savedPaper} width={26} height={26} style={{ color: savedPaper ? 'var(--navy)' : 'var(--text-muted)' }} />
         </button>
       </div>
 
@@ -100,7 +120,7 @@ export default function DetailScreen() {
           className="badge"
           style={{ color: QUARTILE_VAR[trial.quartile], borderColor: QUARTILE_VAR[trial.quartile], marginBottom: 4 }}
         >
-          {trial.quartile} Journal{trial.impactFactor ? ` · IF ${trial.impactFactor.toFixed(1)}` : ''}
+          {trial.quartile} Journal
         </span>
       )}
 
@@ -152,10 +172,14 @@ export default function DetailScreen() {
 
       <p className="section-title"><SparklesIcon width={16} height={16} /> AI Clinical Summary</p>
 
-      {!aiSummary && !aiLoading && (
+      {!aiSummary && !aiLoading && isAiEnabled() && (
         <button type="button" className="btn btn-outline" onClick={handleSummarise}>
           Generate AI Summary
         </button>
+      )}
+
+      {!aiSummary && !aiLoading && !isAiEnabled() && (
+        <p className="hint">Enable AI features in Settings to generate a summary for this paper.</p>
       )}
 
       {aiLoading && (
@@ -176,14 +200,14 @@ export default function DetailScreen() {
 
           <div className="card section" style={{ background: 'var(--success-soft)' }}>
             <p style={{ fontSize: 10, fontWeight: 800, letterSpacing: 1, color: 'var(--text-muted)', margin: '0 0 6px' }}>ONE SENTENCE SUMMARY</p>
-            <p style={{ margin: 0, fontWeight: 600, color: '#176b4d' }}>{aiSummary.headline}</p>
+            <p style={{ margin: 0, fontWeight: 600, color: '#176b4d' }}>{aiSummary.oneLineSummary}</p>
           </div>
 
-          {aiSummary.category?.length > 0 && (
+          {aiSummary.tags?.length > 0 && (
             <div className="chips section">
-              {aiSummary.category.map((cat, i) => (
+              {aiSummary.tags.map((tag, i) => (
                 <span key={i} className="badge" style={{ color: 'var(--accent)', borderColor: 'var(--accent)', background: 'var(--accent-soft)' }}>
-                  {cat}
+                  {tag}
                 </span>
               ))}
             </div>
@@ -191,29 +215,12 @@ export default function DetailScreen() {
 
           <div className="card section" style={{ background: 'var(--accent-soft)' }}>
             <p style={{ fontSize: 10, fontWeight: 800, letterSpacing: 1, color: 'var(--text-muted)', margin: '0 0 6px' }}>FULL SUMMARY</p>
-            <p style={{ margin: 0, lineHeight: 1.6, color: '#1c4564' }}>{aiSummary.comprehensive}</p>
+            <p style={{ margin: 0, lineHeight: 1.6, color: '#1c4564' }}>{aiSummary.fullSummary}</p>
           </div>
 
-          <div style={{ textAlign: 'right' }}>
-            <button type="button" className="btn btn-ghost" onClick={handleSummarise}>↺ Regenerate</button>
-          </div>
-
-          <div className="divider" />
-
-          <p className="section-title">📊 Save to Google Sheets</p>
-
-          {!exported && (
-            <button type="button" className="btn btn-success" onClick={handleExport} disabled={exporting}>
-              {exporting ? <span className="spinner" /> : 'Export to Google Sheets'}
-            </button>
-          )}
-
-          {exportError && <p className="error-text" style={{ marginTop: 8 }}>{exportError}</p>}
-
-          {exported && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 0', color: 'var(--success)' }}>
-              <CheckCircleIcon width={20} height={20} />
-              <span style={{ fontWeight: 600 }}>Saved to Google Sheets</span>
+          {isAiEnabled() && (
+            <div style={{ textAlign: 'right' }}>
+              <button type="button" className="btn btn-ghost" onClick={handleSummarise}>↺ Regenerate</button>
             </div>
           )}
         </div>

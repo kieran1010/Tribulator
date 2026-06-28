@@ -81,11 +81,6 @@ export default function ResultsScreen() {
                   {item.quartile}
                 </span>
               )}
-              {item.impactFactor && (
-                <span className="badge" style={{ color: 'var(--warning)', background: 'var(--warning-soft)' }}>
-                  IF {item.impactFactor.toFixed(1)}
-                </span>
-              )}
             </div>
           </div>
           <p style={{ fontWeight: 600, margin: '0 0 4px', lineHeight: 1.4 }}>{item.title}</p>

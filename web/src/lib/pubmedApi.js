@@ -1,5 +1,5 @@
 import { STUDY_TYPES } from './constants';
-import { decodeHtmlEntities, getJournalQuartile, getImpactFactor } from './format';
+import { decodeHtmlEntities, getJournalQuartile } from './format';
 
 // NCBI caps unauthenticated traffic at ~3 req/sec. A throttled response omits
 // the CORS header entirely, which browsers then surface as an opaque "blocked
@@ -109,14 +109,7 @@ export async function fetchPubMed(query, filters) {
     filtered = resultsRaw.filter(r => r.quartile && order[r.quartile] <= order[filters.minQuartile]);
   }
 
-  const results = filtered.map(item => ({ ...item, impactFactor: getImpactFactor(item.journal) }));
-
-  return results.sort((a, b) => {
-    if (a.impactFactor === null && b.impactFactor === null) return 0;
-    if (a.impactFactor === null) return 1;
-    if (b.impactFactor === null) return -1;
-    return b.impactFactor - a.impactFactor;
-  });
+  return filtered;
 }
 
 export async function fetchFullDetails(pubmedId) {
