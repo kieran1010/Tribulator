@@ -1,9 +1,9 @@
-import brandMark from '../assets/brand-mark.png';
+import brandMark from '../assets/brand-mark-transparent.png';
 
 export default function Header() {
   return (
     <header className="app-header">
-      <div className="brand">
+      <a href="https://hypnos.one" className="brand">
         <img src={brandMark} alt="" className="brand-icon" />
         <div className="brand-text">
           <span className="brand-hypnos">Hypnos</span>
@@ -11,7 +11,7 @@ export default function Header() {
         </div>
         <span className="brand-divider" />
         <span className="brand-product">Tribulator</span>
-      </div>
+      </a>
     </header>
   );
 }
