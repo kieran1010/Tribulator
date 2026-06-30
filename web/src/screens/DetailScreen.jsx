@@ -2,10 +2,10 @@ import { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { fetchFullDetails } from '../lib/pubmedApi';
 import { fetchAISummary } from '../lib/aiApi';
-import { buildVancouverReference } from '../lib/format';
+import { buildVancouverReference, getJournalQuartile } from '../lib/format';
 import { isAiEnabled } from '../lib/storage';
 import { getAllPapers, addPaper, putPaper, deletePaper, findMatchingPaper } from '../lib/db';
-import { BookmarkIcon, ExternalLinkIcon, SparklesIcon, ChevronDown } from '../components/Icon';
+import { BookmarkIcon, ExternalLinkIcon, SparklesIcon, ChevronDown, ChevronLeftIcon } from '../components/Icon';
 
 const QUARTILE_VAR = { Q1: 'var(--q1)', Q2: 'var(--q2)', Q3: 'var(--q3)', Q4: 'var(--q4)' };
 
@@ -103,10 +103,23 @@ export default function DetailScreen() {
   };
 
   const reference = details ? buildVancouverReference(trial, details) : null;
-  const studyLink = `https://pubmed.ncbi.nlm.nih.gov/${trial.pubmedId}/`;
+  const studyLink = trial.pubmedId ? `https://pubmed.ncbi.nlm.nih.gov/${trial.pubmedId}/` : trial.url;
+  const journal = trial.journal || details?.journal;
+  const pubdate = trial.pubdate || details?.pubdate;
+  const quartile = trial.quartile || (details ? getJournalQuartile(details.journal) : null);
 
   return (
     <div>
+      <button
+        type="button"
+        className="btn btn-ghost"
+        onClick={() => navigate(-1)}
+        style={{ marginBottom: 8, paddingLeft: 0 }}
+      >
+        <ChevronLeftIcon width={16} height={16} />
+        Back
+      </button>
+
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, marginBottom: 8 }}>
         <h1 style={{ flex: 1, fontSize: 19, fontWeight: 700, lineHeight: 1.4, margin: 0 }}>{trial.title}</h1>
         <button type="button" onClick={toggleSave} aria-label="Save to library" style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4 }}>
@@ -114,13 +127,13 @@ export default function DetailScreen() {
         </button>
       </div>
 
-      <p className="hint" style={{ fontStyle: 'italic', marginBottom: 8 }}>{trial.journal} · {trial.pubdate}</p>
-      {trial.quartile && (
+      <p className="hint" style={{ fontStyle: 'italic', marginBottom: 8 }}>{journal} · {pubdate}</p>
+      {quartile && (
         <span
           className="badge"
-          style={{ color: QUARTILE_VAR[trial.quartile], borderColor: QUARTILE_VAR[trial.quartile], marginBottom: 4 }}
+          style={{ color: QUARTILE_VAR[quartile], borderColor: QUARTILE_VAR[quartile], marginBottom: 4 }}
         >
-          {trial.quartile} Journal
+          {quartile} Journal
         </span>
       )}
 

@@ -5,6 +5,7 @@ export const SETTINGS_KEYS = {
   WEBHOOK_URL: 'tribulator_webhook_url',
   SPREADSHEET_ID: 'tribulator_spreadsheet_id',
   IMPACT_FACTORS: 'tribulator_impact_factors',
+  LAST_BACKUP: 'tribulator_last_backup',
 };
 
 // These are loaded from the config spreadsheet on startup (see SettingsScreen.js)

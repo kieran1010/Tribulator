@@ -1,5 +1,6 @@
 import { TAGS } from './constants';
 import { getAllPapers, addPaper, findMatchingPaper } from './db';
+import { SETTINGS_KEYS, setSetting } from './storage';
 
 const PAPER_FIELDS = ['title', 'reference', 'url', 'year', 'subject', 'abstract', 'dateEntered', 'oneLineSummary', 'fullSummary', 'tags'];
 
@@ -22,6 +23,7 @@ export async function exportLibraryToFile() {
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
 
+  setSetting(SETTINGS_KEYS.LAST_BACKUP, new Date().toISOString());
   return papers.length;
 }
 

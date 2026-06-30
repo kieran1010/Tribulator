@@ -43,6 +43,14 @@ export function ChevronDown(props) {
   );
 }
 
+export function ChevronLeftIcon(props) {
+  return (
+    <svg {...base} {...props}>
+      <polyline points="15 18 9 12 15 6" />
+    </svg>
+  );
+}
+
 export function TrashIcon(props) {
   return (
     <svg {...base} {...props}>

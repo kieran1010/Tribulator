@@ -1,6 +1,7 @@
 export const SETTINGS_KEYS = {
   API_KEY: 'tribulator_api_key',
   AI_ENABLED: 'tribulator_ai_enabled',
+  LAST_BACKUP: 'tribulator_last_backup',
 };
 
 export function getSetting(key) {

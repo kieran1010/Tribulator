@@ -1,12 +1,17 @@
 import { useState, useEffect } from 'react';
-import { getAllPapers, deletePaper } from '../lib/db';
-import { SearchIcon, TrashIcon, BookmarkIcon, XIcon, ChevronDown, ExternalLinkIcon } from '../components/Icon';
+import { useNavigate } from 'react-router-dom';
+import { getAllPapers, deletePaper, pubmedIdFromUrl } from '../lib/db';
+import { exportLibraryToFile } from '../lib/backup';
+import { SETTINGS_KEYS, getSetting } from '../lib/storage';
+import { SearchIcon, TrashIcon, BookmarkIcon, XIcon } from '../components/Icon';
+
+let hasPromptedBackupThisSession = false;
 
 export default function SavedScreen() {
+  const navigate = useNavigate();
   const [papers, setPapers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState('');
-  const [expandedId, setExpandedId] = useState(null);
 
   useEffect(() => {
     (async () => {
@@ -14,6 +19,27 @@ export default function SavedScreen() {
       all.sort((a, b) => new Date(b.dateEntered || 0) - new Date(a.dateEntered || 0));
       setPapers(all);
       setLoading(false);
+
+      if (!hasPromptedBackupThisSession && all.length > 0) {
+        const lastBackup = getSetting(SETTINGS_KEYS.LAST_BACKUP);
+        const daysSince = lastBackup
+          ? (Date.now() - new Date(lastBackup).getTime()) / (1000 * 60 * 60 * 24)
+          : Infinity;
+        if (daysSince > 5) {
+          hasPromptedBackupThisSession = true;
+          const msg = lastBackup
+            ? `Your last backup was ${Math.floor(daysSince)} days ago. Back up your library now?`
+            : 'You have no backup on record. Back up your saved papers now?';
+          if (confirm(msg)) {
+            try {
+              const count = await exportLibraryToFile();
+              alert(`Exported ${count} paper${count !== 1 ? 's' : ''}.`);
+            } catch (e) {
+              alert('Backup failed: ' + e.message);
+            }
+          }
+        }
+      }
     })();
   }, []);
 
@@ -70,9 +96,22 @@ export default function SavedScreen() {
       )}
 
       {filtered.map(item => {
-        const expanded = expandedId === item.id;
+        const trial = {
+          id: item.id,
+          pubmedId: pubmedIdFromUrl(item.url),
+          title: item.title,
+          journal: '',
+          pubdate: item.year,
+          url: item.url,
+          quartile: null,
+        };
         return (
-          <div key={item.id} className="card" style={{ cursor: 'pointer' }} onClick={() => setExpandedId(expanded ? null : item.id)}>
+          <div
+            key={item.id}
+            className="card"
+            style={{ cursor: 'pointer' }}
+            onClick={() => navigate('/detail', { state: { trial } })}
+          >
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
               <span className="hint">{item.year}</span>
               <button
@@ -85,7 +124,7 @@ export default function SavedScreen() {
             </div>
             <p style={{ fontWeight: 600, margin: '0 0 4px', lineHeight: 1.4 }}>{item.title}</p>
             <p className="hint" style={{ fontStyle: 'italic', margin: '0 0 6px' }}>{item.reference}</p>
-            {item.oneLineSummary && <p style={{ margin: '0 0 6px', fontWeight: 500 }}>{item.oneLineSummary}</p>}
+            {item.oneLineSummary && <p style={{ margin: '0 0 6px', fontSize: 13, fontWeight: 500 }}>{item.oneLineSummary}</p>}
             {item.tags?.length > 0 && (
               <div className="chips" style={{ marginBottom: 6 }}>
                 {item.tags.map((tag, i) => (
@@ -95,24 +134,6 @@ export default function SavedScreen() {
                 ))}
               </div>
             )}
-
-            {expanded && (
-              <div onClick={e => e.stopPropagation()}>
-                <div className="divider" />
-                {item.fullSummary && <p style={{ margin: '0 0 10px', lineHeight: 1.6 }}>{item.fullSummary}</p>}
-                {item.abstract && <p className="hint" style={{ lineHeight: 1.6, margin: '0 0 10px' }}>{item.abstract}</p>}
-                {item.url && (
-                  <a href={item.url} target="_blank" rel="noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                    <ExternalLinkIcon width={14} height={14} />
-                    View on PubMed
-                  </a>
-                )}
-              </div>
-            )}
-
-            <div style={{ textAlign: 'right', marginTop: 4 }}>
-              <ChevronDown width={14} height={14} style={{ transform: expanded ? 'rotate(180deg)' : 'none', color: 'var(--muted)' }} />
-            </div>
           </div>
         );
       })}

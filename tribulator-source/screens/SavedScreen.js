@@ -6,6 +6,9 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { loadBookmarks, saveBookmarks, backupBookmarks, restoreBookmarks } from '../helpers';
+import { getSetting, setSetting, SETTINGS_KEYS } from '../settings';
+
+let hasPromptedBackupThisSession = false;
 
 export default function SavedScreen({ navigation }) {
   const [bookmarks, setBookmarks] = useState([]);
@@ -26,6 +29,37 @@ export default function SavedScreen({ navigation }) {
         });
         setBookmarks(sorted);
         setLoading(false);
+
+        if (!hasPromptedBackupThisSession) {
+          const lastBackup = await getSetting(SETTINGS_KEYS.LAST_BACKUP);
+          const daysSince = lastBackup
+            ? (Date.now() - new Date(lastBackup).getTime()) / (1000 * 60 * 60 * 24)
+            : Infinity;
+          if (daysSince > 5) {
+            hasPromptedBackupThisSession = true;
+            const msg = lastBackup
+              ? `Your last backup was ${Math.floor(daysSince)} days ago. Back up now?`
+              : 'You have no backup on record. Back up your saved papers now?';
+            Alert.alert('Backup Reminder', msg, [
+              { text: 'Later', style: 'cancel' },
+              {
+                text: 'Back Up Now',
+                onPress: async () => {
+                  setBacking(true);
+                  try {
+                    await backupBookmarks(sorted);
+                    await setSetting(SETTINGS_KEYS.LAST_BACKUP, new Date().toISOString());
+                    Alert.alert('Backup Complete', `${sorted.length} papers backed up to Google Sheets.`);
+                  } catch (e) {
+                    Alert.alert('Backup Failed', e.message);
+                  } finally {
+                    setBacking(false);
+                  }
+                },
+              },
+            ]);
+          }
+        }
       })();
     }, [])
   );
@@ -48,6 +82,7 @@ export default function SavedScreen({ navigation }) {
     setBacking(true);
     try {
       await backupBookmarks(bookmarks);
+      await setSetting(SETTINGS_KEYS.LAST_BACKUP, new Date().toISOString());
       Alert.alert('Backup Complete', `${bookmarks.length} papers backed up to Google Sheets.`);
     } catch (e) {
       Alert.alert('Backup Failed', e.message);
@@ -212,7 +247,7 @@ const styles = StyleSheet.create({
   },
   cardTop: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 },
   pubdate: { fontSize: 11, color: '#888' },
-  cardTitle: { fontSize: 14, fontWeight: '600', color: '#111', marginBottom: 4, lineHeight: 20 },
+  cardTitle: { fontSize: 12, fontWeight: '600', color: '#111', marginBottom: 4, lineHeight: 18 },
   cardJournal: { fontSize: 12, color: '#666', fontStyle: 'italic', marginBottom: 6 },
   keywords: { flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginBottom: 6 },
   keyword: {

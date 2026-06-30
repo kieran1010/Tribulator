@@ -92,6 +92,12 @@ export default function DetailScreen({ route, navigation }) {
   return (
     <ScrollView contentContainerStyle={styles.container}>
 
+      {/* Back button */}
+      <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+        <Ionicons name="chevron-back" size={20} color="#0066CC" />
+        <Text style={styles.backText}>Back</Text>
+      </TouchableOpacity>
+
       {/* Title & bookmark */}
       <View style={styles.titleRow}>
         <Text style={[styles.title, { flex: 1 }]}>{trial.title}</Text>
@@ -248,6 +254,8 @@ export default function DetailScreen({ route, navigation }) {
 
 const styles = StyleSheet.create({
   container: { padding: 20, paddingBottom: 48 },
+  backBtn: { flexDirection: 'row', alignItems: 'center', marginBottom: 12, gap: 2 },
+  backText: { color: '#0066CC', fontSize: 15 },
   titleRow: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 8 },
   title: { fontSize: 18, fontWeight: '700', color: '#111', lineHeight: 26 },
   bookmarkBtn: { paddingLeft: 12, paddingTop: 2 },
