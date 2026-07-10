@@ -1,7 +1,6 @@
 // CrossRef needs no API key, but including a real contact email routes requests
 // to their faster, more reliable "polite pool".
-// TODO: replace with a real Hypnos Medical contact address before shipping.
-const CROSSREF_CONTACT_EMAIL = 'contact@hypnosmedical.example';
+const CROSSREF_CONTACT_EMAIL = 'contact@hypnos.one';
 
 function mapCrossrefWork(item) {
   if (!item) return null;
