@@ -61,14 +61,10 @@ export function buildPubmedSearchTerm(query, selectedStudyTypes, medlineOnly) {
   return term;
 }
 
-export async function fetchPubMed(query, filters) {
-  const dateFilter = getDateFilter(filters.dateRange);
-  const searchTerm = buildPubmedSearchTerm(query, filters.studyTypes, filters.medlineOnly);
-
-  const searchUrl = `https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&term=${encodeURIComponent(searchTerm)}&retmax=20&retmode=json${dateFilter}`;
-  const searchRes = await fetchEutils(searchUrl);
-  const searchData = await searchRes.json();
-  const ids = searchData.esearchresult?.idlist || [];
+// Turns a list of PMIDs into the app's "trial" result shape (esummary metadata
+// + efetch keywords). Shared by the filtered search and by smart-search
+// resolution so both flows produce identical, interchangeable trial objects.
+export async function pmidsToTrials(ids) {
   if (ids.length === 0) return [];
 
   const summaryRes = await fetchEutils(`https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?db=pubmed&id=${ids.join(',')}&retmode=json`);
@@ -87,7 +83,7 @@ export async function fetchPubMed(query, filters) {
     keywordMap[pmid] = kwMatches.map(kw => kw.replace(/<[^>]+>/g, '').trim()).filter(Boolean);
   });
 
-  const resultsRaw = ids.map(id => {
+  return ids.map(id => {
     const art = summaryData.result?.[id];
     if (!art) return null;
     return {
@@ -102,6 +98,19 @@ export async function fetchPubMed(query, filters) {
       mesh: art.meshheadinglist || [],
     };
   }).filter(Boolean);
+}
+
+export async function fetchPubMed(query, filters) {
+  const dateFilter = getDateFilter(filters.dateRange);
+  const searchTerm = buildPubmedSearchTerm(query, filters.studyTypes, filters.medlineOnly);
+
+  const searchUrl = `https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&term=${encodeURIComponent(searchTerm)}&retmax=20&retmode=json${dateFilter}`;
+  const searchRes = await fetchEutils(searchUrl);
+  const searchData = await searchRes.json();
+  const ids = searchData.esearchresult?.idlist || [];
+  if (ids.length === 0) return [];
+
+  const resultsRaw = await pmidsToTrials(ids);
 
   let filtered = resultsRaw;
   if (filters.minQuartile && filters.minQuartile !== 'Any') {
@@ -110,6 +119,40 @@ export async function fetchPubMed(query, filters) {
   }
 
   return filtered;
+}
+
+// Matches a bare DOI, or one prefixed with a doi.org URL or "doi:" label.
+const DOI_PATTERN = /^(https?:\/\/(dx\.)?doi\.org\/|doi:\s*)?10\.\d{4,9}\/\S+$/i;
+
+// Returns the bare DOI (prefix stripped) if the input looks like a DOI, else null.
+export function parseDoi(input) {
+  const trimmed = (input || '').trim();
+  if (!DOI_PATTERN.test(trimmed)) return null;
+  return trimmed.replace(/^https?:\/\/(dx\.)?doi\.org\//i, '').replace(/^doi:\s*/i, '');
+}
+
+// PubMed's [AID] field tag matches DOIs (and other article identifiers).
+export async function searchPubmedIdByDoi(doi) {
+  const url = `https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&term=${encodeURIComponent(doi)}%5BAID%5D&retmode=json`;
+  const res = await fetchEutils(url);
+  const data = await res.json();
+  const ids = data.esearchresult?.idlist || [];
+  return ids[0] || null;
+}
+
+export async function searchPubmedByTitle(title) {
+  const url = `https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&term=${encodeURIComponent(title)}%5BTitle%5D&retmax=5&retmode=json`;
+  const res = await fetchEutils(url);
+  const data = await res.json();
+  return data.esearchresult?.idlist || [];
+}
+
+// Last-resort fallback: the raw input as a plain PubMed term query.
+export async function searchPubmedGeneral(text) {
+  const url = `https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&term=${encodeURIComponent(text)}&retmax=5&retmode=json`;
+  const res = await fetchEutils(url);
+  const data = await res.json();
+  return data.esearchresult?.idlist || [];
 }
 
 export async function fetchFullDetails(pubmedId) {

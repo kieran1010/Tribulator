@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { DATE_FILTERS, QUARTILE_FILTERS, STUDY_TYPES } from '../lib/constants';
 import { SearchIcon } from '../components/Icon';
 
@@ -22,6 +22,10 @@ export default function SearchScreen() {
 
   return (
     <div>
+      <p className="hint" style={{ marginBottom: 12 }}>
+        Have a DOI, title, or pasted reference instead? <Link to="/smart-search">Try Smart Search</Link>
+      </p>
+
       <div className="section" style={{ position: 'relative' }}>
         <SearchIcon
           width={18}

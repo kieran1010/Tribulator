@@ -31,16 +31,22 @@ export default function DetailScreen() {
     let cancelled = false;
     (async () => {
       let fetchedDetails = {};
-      try {
-        fetchedDetails = await fetchFullDetails(trial.pubmedId);
-      } catch {
-        fetchedDetails = {};
+      if (trial.pubmedId) {
+        try {
+          fetchedDetails = await fetchFullDetails(trial.pubmedId);
+        } catch {
+          fetchedDetails = {};
+        }
+      } else if (trial.crossrefDetails) {
+        // Smart search resolved this via CrossRef only — no PMID, so there's
+        // nothing further to fetch from PubMed; use what CrossRef gave us.
+        fetchedDetails = trial.crossrefDetails;
       }
       if (cancelled) return;
       setDetails(fetchedDetails);
       setDetailsLoading(false);
 
-      const url = `https://pubmed.ncbi.nlm.nih.gov/${trial.pubmedId}/`;
+      const url = trial.pubmedId ? `https://pubmed.ncbi.nlm.nih.gov/${trial.pubmedId}/` : trial.url;
       const papers = await getAllPapers();
       if (cancelled) return;
       const match = findMatchingPaper(papers, { url });
@@ -71,7 +77,7 @@ export default function DetailScreen() {
     const paper = {
       title: trial.title,
       reference: buildVancouverReference(trial, details || {}),
-      url: `https://pubmed.ncbi.nlm.nih.gov/${trial.pubmedId}/`,
+      url: trial.pubmedId ? `https://pubmed.ncbi.nlm.nih.gov/${trial.pubmedId}/` : (trial.url || ''),
       year: trial.pubdate ? trial.pubdate.split(' ')[0] : '',
       subject: aiSummary?.subject || '',
       abstract: details?.abstract || '',
@@ -128,6 +134,11 @@ export default function DetailScreen() {
       </div>
 
       <p className="hint" style={{ fontStyle: 'italic', marginBottom: 8 }}>{journal} · {pubdate}</p>
+      {trial.notInPubmed && (
+        <div style={{ background: 'var(--warning-soft)', borderLeft: '3px solid var(--warning)', padding: 10, borderRadius: 8, marginBottom: 8 }}>
+          <p className="hint" style={{ margin: 0 }}>Not indexed in PubMed — details resolved via CrossRef.</p>
+        </div>
+      )}
       {quartile && (
         <span
           className="badge"

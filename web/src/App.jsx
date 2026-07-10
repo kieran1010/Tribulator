@@ -3,6 +3,7 @@ import { HashRouter, Routes, Route, Navigate, Outlet, useLocation, useNavigate }
 import Header from './components/Header';
 import BottomNav from './components/BottomNav';
 import SearchScreen from './screens/SearchScreen';
+import SmartSearchScreen from './screens/SmartSearchScreen';
 import ResultsScreen from './screens/ResultsScreen';
 import DetailScreen from './screens/DetailScreen';
 import SavedScreen from './screens/SavedScreen';
@@ -57,6 +58,7 @@ export default function App() {
         <Route element={<Layout />}>
           <Route path="/" element={<Navigate to="/search" replace />} />
           <Route path="/search" element={<SearchScreen />} />
+          <Route path="/smart-search" element={<SmartSearchScreen />} />
           <Route path="/results" element={<ResultsScreen />} />
           <Route path="/detail" element={<DetailScreen />} />
           <Route path="/saved" element={<SavedScreen />} />
