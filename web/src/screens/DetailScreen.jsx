@@ -38,7 +38,7 @@ export default function DetailScreen() {
           fetchedDetails = {};
         }
       } else if (trial.crossrefDetails) {
-        // Smart search resolved this via CrossRef only — no PMID, so there's
+        // Resolved via CrossRef only — no PMID, so there's
         // nothing further to fetch from PubMed; use what CrossRef gave us.
         fetchedDetails = trial.crossrefDetails;
       }

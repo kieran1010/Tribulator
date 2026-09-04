@@ -1,5 +1,8 @@
 import {
   parseDoi,
+  extractDoi,
+  parsePmid,
+  fetchTrialByPmid,
   searchPubmedIdByDoi,
   searchPubmedByTitle,
   searchPubmedGeneral,
@@ -49,20 +52,29 @@ function isConfidentTop(candidates) {
   return (best.score - second.score) / best.score > 0.25;
 }
 
-// Resolves free-form input (DOI / title / pasted reference) to a PubMed (or,
-// failing that, CrossRef) record via a DOI -> title -> CrossRef -> general
-// cascade. `onStep(message)` is called before each network step so the UI can
-// show which stage of the cascade is running.
-export async function resolveSmartSearch(rawInput, onStep) {
+// Resolves free-form input (PMID / DOI / title / pasted reference) to a PubMed
+// (or, failing that, CrossRef) record via a PMID -> DOI -> title -> CrossRef ->
+// general cascade. `onStep(message)` is called before each network step so the
+// UI can show which stage of the cascade is running.
+export async function resolveLookup(rawInput, onStep) {
   const input = (rawInput || '').trim();
   if (!input) return { matchedVia: null, trial: null, alternatives: [] };
 
-  const doi = parseDoi(input);
+  const pmid = parsePmid(input);
+  if (pmid) {
+    onStep?.('Fetching PubMed record...');
+    const trial = await fetchTrialByPmid(pmid);
+    if (trial) return { matchedVia: 'pmid', trial, alternatives: [], confidence: 'high' };
+    // Not a real PMID after all — fall through and treat the digits as text.
+  }
+
+  // A whole-input DOI, or one embedded in a pasted reference.
+  const doi = parseDoi(input) || extractDoi(input);
   if (doi) {
     onStep?.('Searching PubMed by DOI...');
-    const pmid = await searchPubmedIdByDoi(doi);
-    if (pmid) {
-      const [trial] = await pmidsToTrials([pmid]);
+    const doiPmid = await searchPubmedIdByDoi(doi);
+    if (doiPmid) {
+      const [trial] = await pmidsToTrials([doiPmid]);
       return { matchedVia: 'doi-pubmed', trial, alternatives: [], confidence: 'high' };
     }
     onStep?.('Not indexed in PubMed - trying CrossRef...');
@@ -70,7 +82,8 @@ export async function resolveSmartSearch(rawInput, onStep) {
     if (cr) {
       return { matchedVia: 'doi-crossref', trial: crossrefToTrial(cr), alternatives: [], confidence: 'high' };
     }
-    return { matchedVia: null, trial: null, alternatives: [], notFound: true };
+    // A DOI neither registry knows (mistyped, or mangled by the paste) still
+    // leaves the surrounding text to match on, so keep going down the cascade.
   }
 
   onStep?.('Searching PubMed by title...');
@@ -92,12 +105,12 @@ export async function resolveSmartSearch(rawInput, onStep) {
     const confident = isConfidentTop(candidates);
 
     onStep?.('Confirming match in PubMed...');
-    const pmid = best.doi ? await searchPubmedIdByDoi(best.doi) : null;
-    const trial = pmid ? (await pmidsToTrials([pmid]))[0] : crossrefToTrial(best);
+    const refPmid = best.doi ? await searchPubmedIdByDoi(best.doi) : null;
+    const trial = refPmid ? (await pmidsToTrials([refPmid]))[0] : crossrefToTrial(best);
     const alternatives = candidates.slice(1, 4).map(crossrefToTrial);
 
     return {
-      matchedVia: pmid ? 'reference-crossref-pubmed' : 'reference-crossref',
+      matchedVia: refPmid ? 'reference-crossref-pubmed' : 'reference-crossref',
       trial,
       alternatives,
       confidence: confident ? 'high' : 'low',

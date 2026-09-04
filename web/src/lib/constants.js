@@ -51,3 +51,12 @@ export const TAGS = [
   'Plastics', 'Regional Anaesthesia', 'Resuscitation', 'Safety', 'Sedation',
   'Thoracics', 'Trauma', 'Vascular',
 ];
+
+// The filter state a fresh search starts from. Anything differing from this is
+// what the search screen counts as an "active" filter.
+export const DEFAULT_FILTERS = {
+  dateRange: 'All Time',
+  minQuartile: 'Any',
+  medlineOnly: true,
+  studyTypes: STUDY_TYPES.map(t => t.id),
+};
