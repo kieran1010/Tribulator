@@ -85,7 +85,9 @@ export async function pmidsToTrials(ids) {
 
   return ids.map(id => {
     const art = summaryData.result?.[id];
-    if (!art) return null;
+    // esummary answers for an unknown PMID with an `error` record rather than
+    // omitting it, so both cases have to be dropped.
+    if (!art || art.error) return null;
     return {
       id: `pubmed-${id}`,
       pubmedId: id,
@@ -129,6 +131,36 @@ export function parseDoi(input) {
   const trimmed = (input || '').trim();
   if (!DOI_PATTERN.test(trimmed)) return null;
   return trimmed.replace(/^https?:\/\/(dx\.)?doi\.org\//i, '').replace(/^doi:\s*/i, '');
+}
+
+// Finds a DOI embedded in longer text (a pasted reference usually ends in one).
+// Looking that DOI up beats fuzzy-matching the reference text around it.
+const EMBEDDED_DOI_PATTERN = /\b10\.\d{4,9}\/[^\s"'<>]+/;
+
+export function extractDoi(text) {
+  const match = (text || '').match(EMBEDDED_DOI_PATTERN);
+  if (!match) return null;
+  // Trim sentence punctuation the reference put after the DOI, and a closing
+  // bracket that belongs to the surrounding text rather than the DOI itself.
+  let doi = match[0].replace(/[.,;:]+$/, '');
+  if (doi.endsWith(')') && !doi.includes('(')) doi = doi.slice(0, -1);
+  return doi;
+}
+
+// A bare PubMed ID, optionally labelled ("PMID: 32109013"). Bounded at 7-8
+// digits so years, doses and page numbers aren't mistaken for identifiers.
+const PMID_PATTERN = /^(?:pmid\s*:?\s*)?(\d{7,8})$/i;
+
+// Returns the bare PMID if the input is one, else null.
+export function parsePmid(input) {
+  const match = (input || '').trim().match(PMID_PATTERN);
+  return match ? match[1] : null;
+}
+
+// Resolves a PMID straight to a trial, or null if no such record exists.
+export async function fetchTrialByPmid(pmid) {
+  const [trial] = await pmidsToTrials([pmid]);
+  return trial || null;
 }
 
 // PubMed's [AID] field tag matches DOIs (and other article identifiers).

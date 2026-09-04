@@ -1,31 +1,50 @@
-import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { DATE_FILTERS, QUARTILE_FILTERS, STUDY_TYPES } from '../lib/constants';
-import { SearchIcon } from '../components/Icon';
+import { useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { DATE_FILTERS, DEFAULT_FILTERS, QUARTILE_FILTERS, STUDY_TYPES } from '../lib/constants';
+import { classifyQuery } from '../lib/queryClassifier';
+import { SearchIcon, ChevronDown } from '../components/Icon';
+
+// How many filters differ from the defaults — shown as a badge so a collapsed
+// panel never hides a filter that's silently narrowing the results.
+function countActiveFilters(filters) {
+  let count = 0;
+  if (filters.dateRange !== DEFAULT_FILTERS.dateRange) count++;
+  if (filters.minQuartile !== DEFAULT_FILTERS.minQuartile) count++;
+  if (filters.medlineOnly !== DEFAULT_FILTERS.medlineOnly) count++;
+  if (filters.studyTypes.length !== DEFAULT_FILTERS.studyTypes.length) count++;
+  return count;
+}
 
 export default function SearchScreen() {
   const navigate = useNavigate();
   const [query, setQuery] = useState('');
-  const [dateRange, setDateRange] = useState('All Time');
-  const [minQuartile, setMinQuartile] = useState('Any');
-  const [medlineOnly, setMedlineOnly] = useState(true);
-  const [studyTypes, setStudyTypes] = useState(STUDY_TYPES.map(t => t.id));
+  const [filters, setFilters] = useState(DEFAULT_FILTERS);
+  const [showFilters, setShowFilters] = useState(false);
+
+  const classification = useMemo(() => classifyQuery(query), [query]);
+  const isLookup = classification.mode === 'lookup';
+  const activeFilters = countActiveFilters(filters);
+
+  const setFilter = (key, value) => setFilters(prev => ({ ...prev, [key]: value }));
 
   const toggleStudyType = id => {
-    setStudyTypes(prev => (prev.includes(id) ? prev.filter(t => t !== id) : [...prev, id]));
+    setFilters(prev => ({
+      ...prev,
+      studyTypes: prev.studyTypes.includes(id)
+        ? prev.studyTypes.filter(t => t !== id)
+        : [...prev.studyTypes, id],
+    }));
   };
 
   const handleSearch = () => {
     if (!query.trim()) return;
-    navigate('/results', { state: { query, filters: { dateRange, minQuartile, medlineOnly, studyTypes } } });
+    // `mode: 'auto'` hands the classification to the results screen, which is
+    // also where an override can re-run the same query the other way.
+    navigate('/results', { state: { query: query.trim(), filters, mode: 'auto' } });
   };
 
   return (
     <div>
-      <p className="hint" style={{ marginBottom: 12 }}>
-        Have a DOI, title, or pasted reference instead? <Link to="/smart-search">Try Smart Search</Link>
-      </p>
-
       <div className="section" style={{ position: 'relative' }}>
         <SearchIcon
           width={18}
@@ -34,76 +53,121 @@ export default function SearchScreen() {
         />
         <input
           type="text"
-          placeholder="e.g. propofol, sepsis, airway..."
+          placeholder="Topic, DOI, PubMed ID, title, or full reference..."
           value={query}
           onChange={e => setQuery(e.target.value)}
           onKeyDown={e => e.key === 'Enter' && handleSearch()}
           autoCapitalize="none"
           style={{ paddingLeft: 40 }}
         />
+        <p className="hint" style={{ marginTop: 8, minHeight: 16 }}>
+          {classification.hint || 'Paste anything — the search works out what it is.'}
+        </p>
       </div>
 
-      <div className="card section">
-        <p className="section-title">📅 Publication date</p>
-        <div className="chips">
-          {DATE_FILTERS.map(f => (
-            <button
-              key={f}
-              type="button"
-              className={'chip' + (dateRange === f ? ' active' : '')}
-              onClick={() => setDateRange(f)}
-            >
-              {f}
-            </button>
-          ))}
-        </div>
-      </div>
+      <button
+        type="button"
+        className="collapse-head"
+        onClick={() => setShowFilters(v => !v)}
+        aria-expanded={showFilters}
+      >
+        <span className="collapse-head-label">
+          Filters
+          {activeFilters > 0 && <span className="count-badge">{activeFilters}</span>}
+        </span>
+        <ChevronDown
+          width={16}
+          height={16}
+          style={{ transform: showFilters ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }}
+        />
+      </button>
 
-      <div className="card section">
-        <p className="section-title">🏆 Minimum journal quartile</p>
-        <div className="chips">
-          {QUARTILE_FILTERS.map(q => (
-            <button
-              key={q}
-              type="button"
-              className={'chip' + (minQuartile === q ? ' active' : '')}
-              onClick={() => setMinQuartile(q)}
-            >
-              {q}
-            </button>
-          ))}
-        </div>
-      </div>
+      {showFilters && (
+        <div className="section">
+          {isLookup && (
+            <div className="card">
+              <p className="hint">
+                Filters narrow topic searches. This input looks like one specific paper, so they
+                won't be applied.
+              </p>
+            </div>
+          )}
 
-      <div className="card section switch-row">
-        <div>
-          <p className="section-title" style={{ marginBottom: 2 }}>✅ MEDLINE indexed only</p>
-          <p className="hint">Journals meeting strict editorial standards</p>
-        </div>
-        <button
-          type="button"
-          className={'switch' + (medlineOnly ? ' on' : '')}
-          onClick={() => setMedlineOnly(v => !v)}
-          aria-label="MEDLINE indexed only"
-        >
-          <span className="switch-knob" />
-        </button>
-      </div>
-
-      <div className="card section">
-        <p className="section-title">🔬 Study type</p>
-        {STUDY_TYPES.map(type => (
-          <div key={type.id} className="checkbox-row" onClick={() => toggleStudyType(type.id)}>
-            <span className={'checkbox-box' + (studyTypes.includes(type.id) ? ' checked' : '')}>
-              {studyTypes.includes(type.id) && '✓'}
-            </span>
-            <span>{type.label}</span>
+          <div className="card">
+            <p className="section-title">📅 Publication date</p>
+            <div className="chips">
+              {DATE_FILTERS.map(f => (
+                <button
+                  key={f}
+                  type="button"
+                  className={'chip' + (filters.dateRange === f ? ' active' : '')}
+                  onClick={() => setFilter('dateRange', f)}
+                >
+                  {f}
+                </button>
+              ))}
+            </div>
           </div>
-        ))}
-      </div>
 
-      <button type="button" className="btn btn-primary" onClick={handleSearch} disabled={!query.trim()}>
-        Search Trials
+          <div className="card">
+            <p className="section-title">🏆 Minimum journal quartile</p>
+            <div className="chips">
+              {QUARTILE_FILTERS.map(q => (
+                <button
+                  key={q}
+                  type="button"
+                  className={'chip' + (filters.minQuartile === q ? ' active' : '')}
+                  onClick={() => setFilter('minQuartile', q)}
+                >
+                  {q}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="card switch-row">
+            <div>
+              <p className="section-title" style={{ marginBottom: 2 }}>✅ MEDLINE indexed only</p>
+              <p className="hint">Journals meeting strict editorial standards</p>
+            </div>
+            <button
+              type="button"
+              className={'switch' + (filters.medlineOnly ? ' on' : '')}
+              onClick={() => setFilter('medlineOnly', !filters.medlineOnly)}
+              aria-label="MEDLINE indexed only"
+            >
+              <span className="switch-knob" />
+            </button>
+          </div>
+
+          <div className="card">
+            <p className="section-title">🔬 Study type</p>
+            {STUDY_TYPES.map(type => (
+              <div key={type.id} className="checkbox-row" onClick={() => toggleStudyType(type.id)}>
+                <span className={'checkbox-box' + (filters.studyTypes.includes(type.id) ? ' checked' : '')}>
+                  {filters.studyTypes.includes(type.id) && '✓'}
+                </span>
+                <span>{type.label}</span>
+              </div>
+            ))}
+          </div>
+
+          {activeFilters > 0 && (
+            <button type="button" className="btn btn-ghost" onClick={() => setFilters(DEFAULT_FILTERS)}>
+              Reset filters
+            </button>
+          )}
+        </div>
+      )}
+
+      <button
+        type="button"
+        className="btn btn-primary"
+        onClick={handleSearch}
+        disabled={!query.trim()}
+        style={{ marginTop: 16 }}
+      >
+        {isLookup ? 'Find this paper' : 'Search trials'}
       </button>
     </div>
   );
