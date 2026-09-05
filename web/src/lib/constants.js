@@ -60,3 +60,17 @@ export const DEFAULT_FILTERS = {
   medlineOnly: true,
   studyTypes: STUDY_TYPES.map(t => t.id),
 };
+
+// The paper fields that are user data (as opposed to sync bookkeeping). Single
+// source of truth for what gets exported, imported and merged.
+export const PAPER_FIELDS = [
+  'title', 'reference', 'url', 'year', 'subject', 'abstract',
+  'dateEntered', 'oneLineSummary', 'fullSummary', 'tags',
+];
+
+// Bookkeeping the sync layer maintains alongside those fields.
+export const SYNC_FIELDS = ['uid', 'createdAt', 'updatedAt', 'deletedAt', 'fieldTimes'];
+
+// Deleted papers are kept as tombstones so the deletion can reach other
+// devices, then dropped once every device has certainly seen it.
+export const TOMBSTONE_MAX_AGE_DAYS = 90;
