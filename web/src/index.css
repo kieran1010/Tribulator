@@ -410,3 +410,25 @@ code {
   font-size: 11px;
   color: var(--dim);
 }
+
+/* ---------- Optimise: before/after field diffs ---------- */
+.diff-before,
+.diff-after {
+  font-size: 12px;
+  line-height: 1.45;
+  margin: 4px 0 0;
+  padding: 6px 8px;
+  border-radius: 6px;
+  overflow-wrap: anywhere;
+}
+
+.diff-before {
+  color: var(--muted);
+  background: var(--danger-soft);
+  text-decoration: line-through;
+}
+
+.diff-after {
+  color: var(--text);
+  background: var(--success-soft);
+}
