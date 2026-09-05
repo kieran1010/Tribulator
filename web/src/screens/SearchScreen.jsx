@@ -1,8 +1,9 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { DATE_FILTERS, DEFAULT_FILTERS, QUARTILE_FILTERS, STUDY_TYPES } from '../lib/constants';
 import { classifyQuery } from '../lib/queryClassifier';
-import { SearchIcon, ChevronDown } from '../components/Icon';
+import { loadSearchDraft, saveSearchDraft } from '../lib/searchDraft';
+import { SearchIcon, ChevronDown, XIcon } from '../components/Icon';
 
 // How many filters differ from the defaults — shown as a badge so a collapsed
 // panel never hides a filter that's silently narrowing the results.
@@ -17,9 +18,16 @@ function countActiveFilters(filters) {
 
 export default function SearchScreen() {
   const navigate = useNavigate();
-  const [query, setQuery] = useState('');
-  const [filters, setFilters] = useState(DEFAULT_FILTERS);
-  const [showFilters, setShowFilters] = useState(false);
+  // The screen unmounts on navigation, so coming back from results would
+  // otherwise land on an empty box with the filters reset.
+  const [restored] = useState(() => loadSearchDraft());
+  const [query, setQuery] = useState(restored?.query ?? '');
+  const [filters, setFilters] = useState(restored?.filters ?? DEFAULT_FILTERS);
+  const [showFilters, setShowFilters] = useState(restored?.showFilters ?? false);
+
+  useEffect(() => {
+    saveSearchDraft({ query, filters, showFilters });
+  }, [query, filters, showFilters]);
 
   const classification = useMemo(() => classifyQuery(query), [query]);
   const isLookup = classification.mode === 'lookup';
@@ -58,8 +66,21 @@ export default function SearchScreen() {
           onChange={e => setQuery(e.target.value)}
           onKeyDown={e => e.key === 'Enter' && handleSearch()}
           autoCapitalize="none"
-          style={{ paddingLeft: 40 }}
+          style={{ paddingLeft: 40, paddingRight: query ? 40 : 14 }}
         />
+        {query && (
+          <button
+            type="button"
+            onClick={() => setQuery('')}
+            aria-label="Clear search"
+            style={{
+              position: 'absolute', right: 12, top: 12, background: 'none',
+              border: 'none', cursor: 'pointer', color: 'var(--muted)', padding: 0,
+            }}
+          >
+            <XIcon width={16} height={16} />
+          </button>
+        )}
         <p className="hint" style={{ marginTop: 8, minHeight: 16 }}>
           {classification.hint || 'Paste anything — the search works out what it is.'}
         </p>
