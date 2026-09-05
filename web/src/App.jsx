@@ -3,6 +3,7 @@ import { HashRouter, Routes, Route, Navigate, Outlet, useLocation, useNavigate }
 import { startAutoSync } from './lib/sync';
 import Header from './components/Header';
 import BottomNav from './components/BottomNav';
+import UpdatePrompt from './components/UpdatePrompt';
 import SearchScreen from './screens/SearchScreen';
 import ResultsScreen from './screens/ResultsScreen';
 import DetailScreen from './screens/DetailScreen';
@@ -43,6 +44,7 @@ function Layout() {
   return (
     <div className="app-shell">
       <Header />
+      <UpdatePrompt />
       <main className="app-main" onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
         <Outlet />
       </main>
