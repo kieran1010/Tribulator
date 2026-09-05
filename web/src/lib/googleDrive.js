@@ -10,6 +10,30 @@ const UPLOAD_API = 'https://www.googleapis.com/upload/drive/v3/files';
 
 export const LIBRARY_FILENAME = 'tribulator-library.json';
 
+// e.g. 296555094518-ek78l30etraoao6fu8536e2vasgds9ap.apps.googleusercontent.com
+const CLIENT_ID_PATTERN = /^\d+-[a-z0-9_-]+\.apps\.googleusercontent\.com$/i;
+
+// Pasting on a phone routinely picks up spaces or a line break, and the field
+// is too narrow to see a truncated tail — so strip whitespace anywhere in the
+// string, not just at the ends.
+export function normaliseClientId(value) {
+  return (value || '').replace(/\s+/g, '');
+}
+
+// Returns a description of what's wrong with a client ID, or null if it looks
+// usable. Catching this locally avoids Google's opaque "invalid_client" page.
+export function clientIdProblem(value) {
+  const id = normaliseClientId(value);
+  if (!id) return 'Paste your Google OAuth client ID first.';
+  if (/^GOCSPX-/.test(id)) {
+    return 'That is the client secret, not the client ID. Copy the Client ID instead — it ends in .apps.googleusercontent.com';
+  }
+  if (!CLIENT_ID_PATTERN.test(id)) {
+    return 'That does not look like a Google client ID. It should end in .apps.googleusercontent.com — check nothing was cut off when pasting.';
+  }
+  return null;
+}
+
 let gisPromise = null;
 
 function loadGis() {
@@ -49,8 +73,10 @@ export function hasLiveToken() {
 // `interactive: false` asks Google for a token without showing UI, which works
 // when the user has already granted access in this browser. Automatic syncs use
 // it so they can fail quietly instead of throwing a popup at the user.
-export async function getAccessToken(clientId, { interactive = true } = {}) {
-  if (!clientId) throw new Error('No Google client ID configured');
+export async function getAccessToken(rawClientId, { interactive = true } = {}) {
+  const problem = clientIdProblem(rawClientId);
+  if (problem) throw new Error(problem);
+  const clientId = normaliseClientId(rawClientId);
   if (hasLiveToken()) return cachedToken;
 
   const google = await loadGis();
@@ -88,20 +114,54 @@ export async function revokeToken() {
   }
 }
 
+// Drive answers a refusal with a structured body, and the reason inside it is
+// the difference between problems that need completely different fixes —
+// signing in again, enabling the API, or re-granting the permission. Reporting
+// them all as "access expired" sends the user to fix the wrong thing.
+async function readDriveError(res) {
+  const body = await res.json().catch(() => null);
+  const error = body?.error;
+  return {
+    reason: [error?.status, ...(error?.errors || []).map(e => e.reason)].filter(Boolean).join(' '),
+    message: error?.message || '',
+  };
+}
+
 async function driveFetch(token, url, options = {}) {
   const res = await fetch(url, {
     ...options,
     headers: { Authorization: `Bearer ${token}`, ...(options.headers || {}) },
   });
-  if (res.status === 401 || res.status === 403) {
+  if (res.ok) return res;
+
+  const { reason, message } = await readDriveError(res);
+  const signal = `${reason} ${message}`;
+
+  if (res.status === 401) {
     forgetToken();
-    throw new Error('Google Drive access expired — reconnect in Settings');
+    throw new Error('Google sign-in expired — tap Sync now to reconnect');
   }
-  if (!res.ok) {
-    const body = await res.text().catch(() => '');
-    throw new Error(`Drive request failed (${res.status})${body ? ': ' + body.slice(0, 200) : ''}`);
+
+  if (res.status === 403) {
+    // The project never had the Drive API switched on. The token is perfectly
+    // good, so don't throw it away — the fix is in the Google Cloud console.
+    if (/accessNotConfigured|SERVICE_DISABLED|has not been used in project/i.test(signal)) {
+      throw new Error(
+        'The Google Drive API is not enabled for this project. Enable it in the Google Cloud console, wait a minute, then sync again.'
+      );
+    }
+    // Consent went through but the file permission was left unticked.
+    if (/insufficientPermissions|ACCESS_TOKEN_SCOPE_INSUFFICIENT|insufficient authentication scopes/i.test(signal)) {
+      forgetToken();
+      throw new Error(
+        'Drive file access was not granted. Tap Disconnect Google Drive, then Sync now, and allow access when Google asks.'
+      );
+    }
+    forgetToken();
+    throw new Error('Google Drive refused the request' + (message ? `: ${message}` : ''));
   }
-  return res;
+
+  throw new Error(`Drive request failed (${res.status})${message ? `: ${message}` : ''}`);
 }
 
 // `version` increments on every change to a file, which is what lets a sync
