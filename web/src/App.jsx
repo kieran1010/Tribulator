@@ -9,6 +9,7 @@ import ResultsScreen from './screens/ResultsScreen';
 import DetailScreen from './screens/DetailScreen';
 import SavedScreen from './screens/SavedScreen';
 import SettingsScreen from './screens/SettingsScreen';
+import OptimiseScreen from './screens/OptimiseScreen';
 
 const TAB_ORDER = ['/search', '/saved', '/settings'];
 const SWIPE_MIN_DISTANCE = 60;
@@ -69,6 +70,7 @@ export default function App() {
           <Route path="/detail" element={<DetailScreen />} />
           <Route path="/saved" element={<SavedScreen />} />
           <Route path="/settings" element={<SettingsScreen />} />
+          <Route path="/optimise" element={<OptimiseScreen />} />
           <Route path="*" element={<Navigate to="/search" replace />} />
         </Route>
       </Routes>
