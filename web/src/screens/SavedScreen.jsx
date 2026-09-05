@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getAllPapers, deletePaper, pubmedIdFromUrl } from '../lib/db';
 import { exportLibraryToFile } from '../lib/backup';
+import { getLastSync, isSyncEnabled } from '../lib/sync';
 import { SETTINGS_KEYS, getSetting } from '../lib/storage';
 import { SearchIcon, TrashIcon, BookmarkIcon, XIcon } from '../components/Icon';
 
@@ -21,14 +22,19 @@ export default function SavedScreen() {
       setLoading(false);
 
       if (!hasPromptedBackupThisSession && all.length > 0) {
-        const lastBackup = getSetting(SETTINGS_KEYS.LAST_BACKUP);
+        // A recent Drive sync is a backup, so don't also nag for a file one.
+        const lastSync = isSyncEnabled() ? getLastSync() : null;
+        const lastBackup = [getSetting(SETTINGS_KEYS.LAST_BACKUP), lastSync]
+          .filter(Boolean)
+          .sort()
+          .pop() || null;
         const daysSince = lastBackup
           ? (Date.now() - new Date(lastBackup).getTime()) / (1000 * 60 * 60 * 24)
           : Infinity;
         if (daysSince > 5) {
           hasPromptedBackupThisSession = true;
           const msg = lastBackup
-            ? `Your last backup was ${Math.floor(daysSince)} days ago. Back up your library now?`
+            ? `Your library was last backed up ${Math.floor(daysSince)} days ago. Back up now?`
             : 'You have no backup on record. Back up your saved papers now?';
           if (confirm(msg)) {
             try {

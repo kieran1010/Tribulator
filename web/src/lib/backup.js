@@ -1,16 +1,13 @@
-import { TAGS } from './constants';
+import { SYNC_FIELDS, TAGS } from './constants';
 import { getAllPapers, addPaper, findMatchingPaper } from './db';
+import { toSyncDocument } from './merge';
 import { SETTINGS_KEYS, setSetting } from './storage';
-
-const PAPER_FIELDS = ['title', 'reference', 'url', 'year', 'subject', 'abstract', 'dateEntered', 'oneLineSummary', 'fullSummary', 'tags'];
 
 export async function exportLibraryToFile() {
   const papers = await getAllPapers();
-  const data = papers.map(p => {
-    const out = {};
-    PAPER_FIELDS.forEach(f => { out[f] = p[f] ?? (f === 'tags' ? [] : ''); });
-    return out;
-  });
+  // The same document shape the cloud copy uses, so a file backup and a Drive
+  // library are interchangeable — either can restore the other.
+  const data = toSyncDocument(papers);
 
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
@@ -55,6 +52,12 @@ function normalizePaperRecord(raw) {
     }
   }
 
+  // Carry sync bookkeeping through when the file has it (a v2 export), so a
+  // restored paper keeps the identity other devices already know it by.
+  for (const field of SYNC_FIELDS) {
+    if (raw[field] !== undefined) paper[field] = raw[field];
+  }
+
   if (!Array.isArray(paper.tags)) {
     paper.tags = TAGS.filter(tag => {
       const v = lowerMap[tag.toLowerCase()];
@@ -62,7 +65,7 @@ function normalizePaperRecord(raw) {
     });
   }
 
-  return {
+  const record = {
     title: paper.title || '',
     reference: paper.reference || '',
     url: paper.url || '',
@@ -74,6 +77,10 @@ function normalizePaperRecord(raw) {
     fullSummary: paper.fullSummary || '',
     tags: paper.tags,
   };
+  for (const field of SYNC_FIELDS) {
+    if (paper[field] !== undefined) record[field] = paper[field];
+  }
+  return record;
 }
 
 export async function importLibraryFromFile(file) {
@@ -87,6 +94,8 @@ export async function importLibraryFromFile(file) {
 
   for (const raw of records) {
     const candidate = normalizePaperRecord(raw);
+    // A tombstone in a backup file is a deletion, not a paper to restore.
+    if (candidate.deletedAt) { skipped++; continue; }
     if (findMatchingPaper(existing, candidate)) {
       skipped++;
       continue;

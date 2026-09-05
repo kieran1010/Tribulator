@@ -1,5 +1,6 @@
-import { useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import { HashRouter, Routes, Route, Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { startAutoSync } from './lib/sync';
 import Header from './components/Header';
 import BottomNav from './components/BottomNav';
 import SearchScreen from './screens/SearchScreen';
@@ -51,6 +52,9 @@ function Layout() {
 }
 
 export default function App() {
+  // Syncs on launch when Drive sync is switched on, then after every change.
+  useEffect(() => { startAutoSync(); }, []);
+
   return (
     <HashRouter>
       <Routes>
