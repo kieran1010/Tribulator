@@ -179,6 +179,26 @@ export async function searchPubmedByTitle(title) {
   return data.esearchresult?.idlist || [];
 }
 
+// PubMed's own spell checker. It knows drug names, MeSH terms and journal
+// titles in a way a bundled dictionary never could, and needs no key.
+export async function fetchSpellingSuggestion(term) {
+  const url = `https://eutils.ncbi.nlm.nih.gov/entrez/eutils/espell.fcgi?db=pubmed&term=${encodeURIComponent(term)}`;
+  const res = await fetchEutils(url);
+  const xml = await res.text();
+  const match = xml.match(/<CorrectedQuery>([\s\S]*?)<\/CorrectedQuery>/);
+  const corrected = match ? decodeHtmlEntities(match[1]).trim() : '';
+  if (!corrected) return null;
+  // ESpell lower-cases and normalises spacing even when nothing is misspelled,
+  // so compare loosely — otherwise it "corrects" Propofol to propofol.
+  if (looseEqual(corrected, term)) return null;
+  return corrected;
+}
+
+function looseEqual(a, b) {
+  const normalise = t => (t || '').toLowerCase().replace(/\s+/g, ' ').trim();
+  return normalise(a) === normalise(b);
+}
+
 // Last-resort fallback: the raw input as a plain PubMed term query.
 export async function searchPubmedGeneral(text) {
   const url = `https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&term=${encodeURIComponent(text)}&retmax=5&retmode=json`;
