@@ -1,11 +1,15 @@
 import { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { fetchPubMed } from '../lib/pubmedApi';
+import { fetchPubMed, fetchSpellingSuggestion } from '../lib/pubmedApi';
 import { resolveLookup } from '../lib/lookupApi';
 import { classifyQuery } from '../lib/queryClassifier';
 import { DEFAULT_FILTERS } from '../lib/constants';
 import ResultCard from '../components/ResultCard';
 import { ChevronDown } from '../components/Icon';
+
+// Above this many results the search clearly worked, so the spell check is
+// skipped entirely and costs a well-spelled search nothing.
+const SPELL_CHECK_MAX_RESULTS = 5;
 
 const MATCH_LABELS = {
   pmid: 'Matched via PubMed ID',
@@ -26,12 +30,15 @@ export default function ResultsScreen() {
   // 'auto' lets the input decide; an explicit mode comes from the override.
   const requestedMode = state?.mode || 'auto';
   const mode = requestedMode === 'auto' ? classifyQuery(query).mode || 'keywords' : requestedMode;
+  // Set when the user has insisted on their own spelling.
+  const spellCheck = state?.spellCheck !== false;
 
   const [loading, setLoading] = useState(true);
   const [step, setStep] = useState('');
   const [error, setError] = useState(null);
   const [lookup, setLookup] = useState(null);
   const [results, setResults] = useState([]);
+  const [spelling, setSpelling] = useState(null);
   const [showAlternatives, setShowAlternatives] = useState(false);
 
   useEffect(() => {
@@ -44,6 +51,7 @@ export default function ResultsScreen() {
     setError(null);
     setLookup(null);
     setResults([]);
+    setSpelling(null);
     setShowAlternatives(false);
 
     (async () => {
@@ -53,7 +61,32 @@ export default function ResultsScreen() {
           if (!cancelled) setLookup(resolved);
         } else {
           const found = await fetchPubMed(query, filters);
-          if (!cancelled) setResults(found);
+          if (cancelled) return;
+          setResults(found);
+
+          // Spelling is only ever second-guessed for topic searches. Correcting
+          // a DOI, a PubMed ID or a pasted title would be actively wrong.
+          if (!spellCheck || found.length >= SPELL_CHECK_MAX_RESULTS) return;
+
+          // A failed or unavailable spell check must never break the search
+          // that already succeeded.
+          const corrected = await fetchSpellingSuggestion(query).catch(() => null);
+          if (cancelled || !corrected) return;
+
+          if (found.length > 0) {
+            // The search worked; just offer the correction rather than
+            // overriding what was actually asked for.
+            setSpelling({ corrected, status: 'suggested' });
+            return;
+          }
+
+          setStep('Checking spelling...');
+          const retried = await fetchPubMed(corrected, filters);
+          if (cancelled) return;
+          setResults(retried);
+          // 'exhausted' matters: offering a correction that itself found
+          // nothing would just send the user round the same loop.
+          setSpelling({ corrected, status: retried.length > 0 ? 'applied' : 'exhausted' });
         }
       } catch (e) {
         if (!cancelled) setError('Failed to fetch results: ' + e.message);
@@ -67,7 +100,7 @@ export default function ResultsScreen() {
 
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [query, mode]);
+  }, [query, mode, spellCheck]);
 
   if (!query) return null;
 
@@ -75,6 +108,10 @@ export default function ResultsScreen() {
   // still returns to the search screen rather than the discarded attempt.
   const switchMode = next => {
     navigate('/results', { replace: true, state: { query, filters, mode: next } });
+  };
+
+  const searchInstead = (term, { spellCheck: check = true } = {}) => {
+    navigate('/results', { replace: true, state: { query: term, filters, mode: 'keywords', spellCheck: check } });
   };
 
   const openTrial = trial => navigate('/detail', { state: { trial } });
@@ -101,7 +138,7 @@ export default function ResultsScreen() {
       ? lookup?.trial
         ? MATCH_LABELS[lookup.matchedVia] || 'Match found'
         : 'No matching paper found'
-      : `${results.length} result${results.length === 1 ? '' : 's'} for "${query}"`;
+      : `${results.length} result${results.length === 1 ? '' : 's'} for "${spelling?.status === 'applied' ? spelling.corrected : query}"`;
 
   return (
     <div>
@@ -111,6 +148,24 @@ export default function ResultsScreen() {
           {mode === 'lookup' ? 'Search as a topic instead' : 'Look up as a specific paper'}
         </button>
       </div>
+
+      {mode === 'keywords' && spelling?.status === 'applied' && (
+        <p className="hint" style={{ marginBottom: 12 }}>
+          Nothing matched “{query}”, so this is showing <strong>{spelling.corrected}</strong> instead.{' '}
+          <button type="button" className="link-button" onClick={() => searchInstead(query, { spellCheck: false })}>
+            Search “{query}” anyway
+          </button>
+        </p>
+      )}
+
+      {mode === 'keywords' && spelling?.status === 'suggested' && (
+        <p className="hint" style={{ marginBottom: 12 }}>
+          Did you mean{' '}
+          <button type="button" className="link-button" onClick={() => searchInstead(spelling.corrected)}>
+            {spelling.corrected}
+          </button>?
+        </p>
+      )}
 
       {mode === 'lookup' && !lookup?.trial && (
         <div className="empty-state">
@@ -153,6 +208,9 @@ export default function ResultsScreen() {
       {mode === 'keywords' && results.length === 0 && (
         <div className="empty-state">
           <p>No results found. Try different search terms or filters.</p>
+          {spelling?.status === 'exhausted' && (
+            <p className="hint">Nothing matched “{spelling.corrected}” either.</p>
+          )}
         </div>
       )}
 
