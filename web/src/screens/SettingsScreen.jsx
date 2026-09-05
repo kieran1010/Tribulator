@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { SETTINGS_KEYS, getSetting, setSetting } from '../lib/storage';
 import { exportLibraryToFile, importLibraryFromFile } from '../lib/backup';
 import { syncNow, getLastSync, isSyncConfigured } from '../lib/sync';
-import { revokeToken } from '../lib/googleDrive';
+import { revokeToken, normaliseClientId, clientIdProblem } from '../lib/googleDrive';
 import { CloudDownIcon, CloudUpIcon, CheckCircleIcon } from '../components/Icon';
 
 function formatWhen(iso) {
@@ -42,10 +42,20 @@ export default function SettingsScreen() {
   }, []);
 
   const handleSyncNow = async () => {
+    // Check the client ID here so an obvious problem reads as a sentence
+    // rather than as Google's "invalid_client" error page.
+    const problem = clientIdProblem(clientId);
+    if (problem) {
+      setSyncNotice({ type: 'error', text: problem });
+      return;
+    }
+
     setSyncing(true);
     setSyncNotice(null);
     try {
-      setSetting(SETTINGS_KEYS.GOOGLE_CLIENT_ID, clientId.trim());
+      const cleaned = normaliseClientId(clientId);
+      setClientId(cleaned);
+      setSetting(SETTINGS_KEYS.GOOGLE_CLIENT_ID, cleaned);
       const result = await syncNow({ interactive: true, onStep: setSyncStep });
       setLastSync(result.at);
       // Switching sync on only after the first success means auto-sync never
