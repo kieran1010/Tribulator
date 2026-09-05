@@ -2,6 +2,7 @@ import { getAllRecords, applyMergedRecords, purgeExpiredTombstones, onMutation }
 import { mergeLibraries, toSyncDocument, papersFromSyncDocument } from './merge';
 import { SETTINGS_KEYS, getSetting, setSetting } from './storage';
 import {
+  normaliseClientId,
   getAccessToken,
   hasLiveToken,
   findLibraryFile,
@@ -15,8 +16,22 @@ import {
 // read, so callers share the one in-flight promise instead.
 let inFlight = null;
 
+// A client ID baked in at build time (a GitHub Actions variable). A Google
+// client ID is public by design, so shipping it in the bundle is safe and saves
+// pasting a 70-character string onto every device.
+const BUILD_CLIENT_ID = normaliseClientId(import.meta.env?.VITE_GOOGLE_CLIENT_ID || '');
+
+export function hasBuiltInClientId() {
+  return !!BUILD_CLIENT_ID;
+}
+
+// Anything pasted on this device overrides the built-in one.
+export function getClientId() {
+  return getSetting(SETTINGS_KEYS.GOOGLE_CLIENT_ID) || BUILD_CLIENT_ID;
+}
+
 export function isSyncConfigured() {
-  return !!getSetting(SETTINGS_KEYS.GOOGLE_CLIENT_ID);
+  return !!getClientId();
 }
 
 export function isSyncEnabled() {
@@ -42,7 +57,7 @@ async function resolveLibraryFile(token) {
 }
 
 async function runSync({ interactive, onStep }) {
-  const clientId = getSetting(SETTINGS_KEYS.GOOGLE_CLIENT_ID);
+  const clientId = getClientId();
   if (!clientId) throw new Error('Add your Google client ID in Settings first');
 
   onStep?.('Connecting to Google Drive...');

@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
 import { SETTINGS_KEYS, getSetting, setSetting } from '../lib/storage';
 import { exportLibraryToFile, importLibraryFromFile } from '../lib/backup';
-import { syncNow, getLastSync, isSyncConfigured } from '../lib/sync';
+import { syncNow, getLastSync, isSyncConfigured, hasBuiltInClientId } from '../lib/sync';
 import { revokeToken, normaliseClientId, clientIdProblem } from '../lib/googleDrive';
+import { buildLabel } from '../lib/build';
 import { CloudDownIcon, CloudUpIcon, CheckCircleIcon } from '../components/Icon';
 
 function formatWhen(iso) {
@@ -42,20 +43,27 @@ export default function SettingsScreen() {
   }, []);
 
   const handleSyncNow = async () => {
-    // Check the client ID here so an obvious problem reads as a sentence
-    // rather than as Google's "invalid_client" error page.
-    const problem = clientIdProblem(clientId);
-    if (problem) {
-      setSyncNotice({ type: 'error', text: problem });
+    // An empty field with a client ID built into the app is not an error —
+    // it just means this device is happy with the built-in one.
+    const typed = normaliseClientId(clientId);
+    if (typed) {
+      // Check it here so an obvious problem reads as a sentence rather than as
+      // Google's "invalid_client" error page.
+      const problem = clientIdProblem(typed);
+      if (problem) {
+        setSyncNotice({ type: 'error', text: problem });
+        return;
+      }
+    } else if (!hasBuiltInClientId()) {
+      setSyncNotice({ type: 'error', text: 'Paste your Google OAuth client ID first.' });
       return;
     }
 
     setSyncing(true);
     setSyncNotice(null);
     try {
-      const cleaned = normaliseClientId(clientId);
-      setClientId(cleaned);
-      setSetting(SETTINGS_KEYS.GOOGLE_CLIENT_ID, cleaned);
+      setClientId(typed);
+      setSetting(SETTINGS_KEYS.GOOGLE_CLIENT_ID, typed);
       const result = await syncNow({ interactive: true, onStep: setSyncStep });
       setLastSync(result.at);
       // Switching sync on only after the first success means auto-sync never
@@ -202,7 +210,9 @@ export default function SettingsScreen() {
           spellCheck={false}
         />
         <p className="hint">
-          Your Google OAuth client ID.{' '}
+          {hasBuiltInClientId()
+            ? 'This app ships with a client ID — leave this blank unless you want to use your own.'
+            : 'Your Google OAuth client ID.'}{' '}
           <button type="button" className="link-button" onClick={() => setShowSyncHelp(v => !v)}>
             {showSyncHelp ? 'Hide setup steps' : 'How do I get one?'}
           </button>
@@ -244,6 +254,7 @@ export default function SettingsScreen() {
           className={'switch' + (syncEnabled ? ' on' : '')}
           onClick={toggleSync}
           disabled={!isSyncConfigured() && !clientId.trim()}
+
           aria-label="Sync automatically"
         >
           <span className="switch-knob" />
@@ -254,7 +265,7 @@ export default function SettingsScreen() {
         type="button"
         className="btn btn-primary section"
         onClick={handleSyncNow}
-        disabled={syncing || !clientId.trim()}
+        disabled={syncing || (!clientId.trim() && !hasBuiltInClientId())}
       >
         {syncing ? <span className="spinner" /> : <CloudUpIcon width={18} height={18} />}
         {syncing ? (syncStep || 'Syncing...') : 'Sync now'}
@@ -273,6 +284,8 @@ export default function SettingsScreen() {
           {syncNotice.text}
         </p>
       )}
+
+      <p className="build-stamp">{buildLabel()}</p>
     </div>
   );
 }

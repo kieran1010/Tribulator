@@ -377,3 +377,36 @@ code {
   padding: 1px 4px;
   overflow-wrap: anywhere;
 }
+
+/* ---------- New-version prompt ---------- */
+.update-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 16px;
+  background: var(--pale);
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--navy);
+}
+
+.update-bar button {
+  flex-shrink: 0;
+  padding: 6px 14px;
+  border: none;
+  border-radius: 8px;
+  background: var(--navy);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.build-stamp {
+  margin-top: 24px;
+  text-align: center;
+  font-size: 11px;
+  color: var(--dim);
+}

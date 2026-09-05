@@ -36,6 +36,11 @@ jobs:
       - name: Build
         working-directory: web
         run: npm run build
+        env:
+          # A Google client ID is public by design, so it ships in the bundle as
+          # a repository variable rather than a secret. Unset is fine — the app
+          # then expects one to be pasted in Settings.
+          VITE_GOOGLE_CLIENT_ID: ${{ vars.VITE_GOOGLE_CLIENT_ID }}
 
       - name: Add custom domain CNAME
         run: echo "tribulator.hypnos.one" > web/dist/CNAME
