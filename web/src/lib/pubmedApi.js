@@ -233,6 +233,8 @@ export async function fetchFullDetails(pubmedId) {
   return {
     authors: art?.authors?.map(a => a.name).join(', '),
     journal: art?.fulljournalname,
+    // PubMed's abbreviated journal title, which is the form Vancouver uses.
+    journalAbbrev: art?.source,
     volume: art?.volume,
     issue: art?.issue,
     pages: art?.pages,

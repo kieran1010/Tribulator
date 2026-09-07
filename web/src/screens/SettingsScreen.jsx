@@ -1,10 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { SETTINGS_KEYS, getSetting, setSetting } from '../lib/storage';
 import { exportLibraryToFile, importLibraryFromFile } from '../lib/backup';
 import { syncNow, getLastSync, isSyncConfigured, hasBuiltInClientId } from '../lib/sync';
 import { revokeToken, normaliseClientId, clientIdProblem } from '../lib/googleDrive';
 import { buildLabel } from '../lib/build';
-import { CloudDownIcon, CloudUpIcon, CheckCircleIcon } from '../components/Icon';
+import { CloudDownIcon, CloudUpIcon, CheckCircleIcon, SparklesIcon } from '../components/Icon';
 
 function formatWhen(iso) {
   if (!iso) return 'never';
@@ -18,6 +19,7 @@ function formatWhen(iso) {
 }
 
 export default function SettingsScreen() {
+  const navigate = useNavigate();
   const [aiEnabled, setAiEnabled] = useState(false);
   const [apiKey, setApiKey] = useState('');
   const [saved, setSaved] = useState(false);
@@ -185,6 +187,11 @@ export default function SettingsScreen() {
         Import Library
       </button>
       <input ref={fileInputRef} type="file" accept="application/json" onChange={handleImportFile} style={{ display: 'none' }} />
+
+      <button type="button" className="btn btn-outline section" style={{ marginTop: 12 }} onClick={() => navigate('/optimise')}>
+        <SparklesIcon width={18} height={18} />
+        Optimise Library
+      </button>
 
       {notice && (
         <p className={notice.type === 'error' ? 'error-text' : 'hint'} style={{ marginTop: 12 }}>{notice.text}</p>
