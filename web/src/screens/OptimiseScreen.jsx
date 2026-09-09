@@ -1,7 +1,16 @@
-import { useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { planOptimisation, applyOptimisation } from '../lib/optimise';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
+import {
+  planOptimisation,
+  applyOptimisation,
+  isBlank,
+  SELECTABLE_FIELDS,
+  AI_FIELDS,
+  DEFAULT_SELECTED_FIELDS,
+} from '../lib/optimise';
 import { exportLibraryToFile } from '../lib/backup';
+import { getAllPapers } from '../lib/db';
+import { isAiEnabled } from '../lib/storage';
 import { ChevronLeftIcon, ChevronDown, SparklesIcon } from '../components/Icon';
 
 const REASON_LABELS = {
@@ -18,7 +27,17 @@ const CONFIDENCE_NOTE = {
   high: 'matched by title',
   medium: 'matched by title — check before applying',
   low: 'loosely matched — check carefully before applying',
+  'ai-only': 'no PubMed/CrossRef match — content generated from what you already have, unverified',
 };
+
+// Default-unticked confidence tiers: anything not resolved with certainty, so
+// the user opts in per paper rather than a wrong match silently applying.
+const REVIEW_FIRST = new Set(['low', 'medium', 'ai-only']);
+
+function formatValue(value) {
+  if (Array.isArray(value)) return value.join(', ');
+  return String(value ?? '');
+}
 
 function FieldDiff({ change }) {
   return (
@@ -26,16 +45,20 @@ function FieldDiff({ change }) {
       <p className="hint" style={{ fontWeight: 600, margin: 0 }}>
         {change.field} <span style={{ fontWeight: 400 }}>({REASON_LABELS[change.reason] || change.reason})</span>
       </p>
-      {String(change.from).trim() !== '' && (
-        <p className="diff-before">{String(change.from).slice(0, 300)}</p>
+      {formatValue(change.from).trim() !== '' && (
+        <p className="diff-before">{formatValue(change.from).slice(0, 300)}</p>
       )}
-      <p className="diff-after">{String(change.to).slice(0, 300)}</p>
+      <p className="diff-after">{formatValue(change.to).slice(0, 300)}</p>
     </div>
   );
 }
 
 export default function OptimiseScreen() {
   const navigate = useNavigate();
+  const aiAvailable = isAiEnabled();
+
+  const [selectedFields, setSelectedFields] = useState(() => new Set(DEFAULT_SELECTED_FIELDS));
+  const [papers, setPapers] = useState([]);
   const [scanning, setScanning] = useState(false);
   const [progress, setProgress] = useState(null);
   const [plan, setPlan] = useState(null);
@@ -45,12 +68,31 @@ export default function OptimiseScreen() {
   const [notice, setNotice] = useState(null);
   const stopRef = useRef(false);
 
+  // Loaded once for the "up to N papers" estimate below — cheap, local only,
+  // no network. Nothing here calls the AI; it just counts blank fields.
+  useEffect(() => { getAllPapers().then(setPapers); }, []);
+
   const toggle = (set, update, key) => {
     const next = new Set(set);
     if (next.has(key)) next.delete(key);
     else next.add(key);
     update(next);
   };
+
+  const toggleField = field => {
+    setSelectedFields(prev => {
+      const next = new Set(prev);
+      if (next.has(field)) next.delete(field);
+      else next.add(field);
+      return next;
+    });
+  };
+
+  const aiCandidateCount = useMemo(() => {
+    const wantedAiFields = AI_FIELDS.filter(f => selectedFields.has(f));
+    if (wantedAiFields.length === 0) return 0;
+    return papers.filter(p => wantedAiFields.some(f => isBlank(p[f]))).length;
+  }, [papers, selectedFields]);
 
   const entryKey = entry => entry.paper.uid || entry.paper.id;
 
@@ -61,13 +103,15 @@ export default function OptimiseScreen() {
     stopRef.current = false;
     try {
       const result = await planOptimisation({
+        fields: selectedFields,
         onProgress: setProgress,
         shouldStop: () => stopRef.current,
       });
       setPlan(result);
-      // Anything matched loosely starts unticked: the user opts in to those.
+      // Anything not resolved with certainty starts unticked: the user opts
+      // in to those rather than a wrong match applying by default.
       setSkipped(new Set(
-        result.entries.filter(e => e.confidence === 'low' || e.confidence === 'medium').map(entryKey)
+        result.entries.filter(e => REVIEW_FIRST.has(e.confidence)).map(entryKey)
       ));
     } catch (e) {
       setNotice({ type: 'error', text: 'Scan failed: ' + e.message });
@@ -113,10 +157,45 @@ export default function OptimiseScreen() {
       </p>
 
       {!plan && !scanning && (
-        <button type="button" className="btn btn-primary" onClick={handleScan}>
-          <SparklesIcon width={18} height={18} />
-          Scan library
-        </button>
+        <>
+          <div className="card section">
+            <p className="section-title" style={{ marginBottom: 8 }}>Fill in if missing</p>
+            {SELECTABLE_FIELDS.map(f => {
+              const locked = f.kind === 'ai' && !aiAvailable;
+              const checked = selectedFields.has(f.field) && !locked;
+              return (
+                <div
+                  key={f.field}
+                  className="checkbox-row"
+                  style={locked ? { opacity: 0.5, cursor: 'default' } : undefined}
+                  onClick={() => !locked && toggleField(f.field)}
+                >
+                  <span className={'checkbox-box' + (checked ? ' checked' : '')}>{checked ? '✓' : ''}</span>
+                  <span>
+                    {f.label}
+                    {f.kind === 'ai' && <span className="hint"> — uses your Anthropic API key</span>}
+                  </span>
+                </div>
+              );
+            })}
+            {!aiAvailable && (
+              <p className="hint" style={{ marginTop: 8 }}>
+                <Link to="/settings">Enable AI features in Settings</Link> to fill in subject, summaries or tags.
+              </p>
+            )}
+            {aiAvailable && aiCandidateCount > 0 && (
+              <p className="hint" style={{ marginTop: 8 }}>
+                Up to {aiCandidateCount} paper{aiCandidateCount === 1 ? '' : 's'} may need an AI call — this happens
+                during the scan itself, not when you apply, so it uses your API key as soon as you tap Scan.
+              </p>
+            )}
+          </div>
+
+          <button type="button" className="btn btn-primary" onClick={handleScan}>
+            <SparklesIcon width={18} height={18} />
+            Scan library
+          </button>
+        </>
       )}
 
       {scanning && (
@@ -142,6 +221,7 @@ export default function OptimiseScreen() {
               {plan.unchanged} already correct
               {plan.unresolved.length > 0 && ` · ${plan.unresolved.length} could not be matched`}
               {plan.failed.length > 0 && ` · ${plan.failed.length} failed to check`}
+              {plan.aiFailed > 0 && ` · AI generation failed for ${plan.aiFailed}`}
               {plan.stopped && ' · scan stopped early'}
             </p>
           </div>
