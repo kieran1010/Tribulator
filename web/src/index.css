@@ -432,3 +432,28 @@ code {
   color: var(--text);
   background: var(--success-soft);
 }
+
+/* ---------- Header: subtle background-sync cue ---------- */
+.sync-indicator {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  color: rgba(255, 255, 255, 0.55);
+  opacity: 0;
+  transition: opacity 0.5s ease;
+}
+
+.sync-indicator.visible {
+  opacity: 1;
+  animation: sync-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes sync-pulse {
+  0%, 100% { opacity: 0.45; }
+  50% { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sync-indicator.visible { animation: none; opacity: 0.8; }
+}
