@@ -82,12 +82,25 @@ async function resolveLibraryFile(token) {
   return findLibraryFile(token);
 }
 
+// How long a non-interactive (automatic) sync waits for Google before giving
+// up. A real user in an interactive "Sync now" popup may legitimately take
+// longer than this, so it only applies to the silent, unattended path.
+const NON_INTERACTIVE_TOKEN_TIMEOUT_MS = 8000;
+
 async function runSync({ interactive, onStep }) {
   const clientId = getClientId();
   if (!clientId) throw new Error('Add your Google client ID in Settings first');
 
+  // A device that's fully offline should fail this immediately and quietly
+  // rather than reaching for Google at all — there's nothing subtle to make
+  // of a flash toward a domain that was never going to answer.
+  if (!navigator.onLine) throw new Error("You're offline — check your connection and try again.");
+
   onStep?.('Connecting to Google Drive...');
-  const token = await getAccessToken(clientId, { interactive });
+  const token = await getAccessToken(clientId, {
+    interactive,
+    timeoutMs: interactive ? undefined : NON_INTERACTIVE_TOKEN_TIMEOUT_MS,
+  });
 
   onStep?.('Finding your library...');
   let file = await resolveLibraryFile(token);
