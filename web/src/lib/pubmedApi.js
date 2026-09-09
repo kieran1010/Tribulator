@@ -10,7 +10,7 @@ let eutilsQueue = Promise.resolve();
 let lastEutilsCall = 0;
 const EUTILS_MIN_GAP_MS = 350;
 
-function fetchEutils(url) {
+function fetchEutilsOnce(url) {
   const result = eutilsQueue.then(async () => {
     const wait = Math.max(0, EUTILS_MIN_GAP_MS - (Date.now() - lastEutilsCall));
     if (wait > 0) await new Promise(r => setTimeout(r, wait));
@@ -19,6 +19,27 @@ function fetchEutils(url) {
   });
   eutilsQueue = result.catch(() => {});
   return result;
+}
+
+// fetch() itself rejecting (as opposed to resolving with a non-2xx response)
+// means the request never completed at all — offline, DNS, or exactly the
+// rate-limit/CORS case above. That is often gone half a second later, so one
+// retry absorbs it rather than surfacing the browser's own opaque "Failed to
+// fetch" to a clinician mid-search. It still goes through the same serialized
+// queue, so the retry can't itself burst past the rate limit.
+const EUTILS_RETRY_DELAY_MS = 800;
+
+async function fetchEutils(url) {
+  try {
+    return await fetchEutilsOnce(url);
+  } catch {
+    await new Promise(r => setTimeout(r, EUTILS_RETRY_DELAY_MS));
+    try {
+      return await fetchEutilsOnce(url);
+    } catch {
+      throw new Error('Could not reach PubMed. Check your connection and try again.');
+    }
+  }
 }
 
 function getDateFilter(range) {
