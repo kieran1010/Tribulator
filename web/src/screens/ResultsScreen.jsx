@@ -89,7 +89,12 @@ export default function ResultsScreen() {
           setSpelling({ corrected, status: retried.length > 0 ? 'applied' : 'exhausted' });
         }
       } catch (e) {
-        if (!cancelled) setError('Failed to fetch results: ' + e.message);
+        // A message that already reads as a complete, actionable sentence
+        // (a network failure after retrying, for one) needs no extra label —
+        // prefixing it produced "Failed to fetch results: Failed to fetch",
+        // doubled, leaving the user to work out that was one failure, not two.
+        const isCompleteSentence = /^[A-Z].*[.!?]$/.test(e.message || '');
+        if (!cancelled) setError(isCompleteSentence ? e.message : 'Failed to fetch results: ' + e.message);
       } finally {
         if (!cancelled) {
           setLoading(false);
