@@ -11,10 +11,13 @@ export async function exportLibraryToFile() {
 
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
-  const date = new Date().toISOString().split('T')[0];
+  // Date only would let two backups taken the same day silently overwrite
+  // each other in a downloads folder (Optimise Library takes one before every
+  // apply). ':' is stripped since it's invalid in a Windows filename.
+  const stamp = new Date().toISOString().replace('T', '_').replace(/:/g, '-').split('.')[0];
   const a = document.createElement('a');
   a.href = url;
-  a.download = `tribulator-backup-${date}.json`;
+  a.download = `tribulator-backup-${stamp}.json`;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
