@@ -16,6 +16,32 @@ import {
 // read, so callers share the one in-flight promise instead.
 let inFlight = null;
 
+// A non-interactive token refresh still involves a brief pop to Google's own
+// domain and back — Google's identity library has no fully silent path, even
+// with no UI requested — so anything that runs during an automatic sync
+// (launch, after an edit, on reconnect) can surface unexplained. Screens
+// subscribe here to show a small "syncing" cue instead, so that flash reads
+// as part of something the app is doing rather than an unexplained jump.
+const syncStateListeners = new Set();
+let syncing = false;
+
+export function onSyncStateChange(listener) {
+  syncStateListeners.add(listener);
+  return () => syncStateListeners.delete(listener);
+}
+
+export function isSyncing() {
+  return syncing;
+}
+
+function setSyncing(value) {
+  if (syncing === value) return;
+  syncing = value;
+  syncStateListeners.forEach(l => {
+    try { l(value); } catch { /* a listener must never break a sync */ }
+  });
+}
+
 // A client ID baked in at build time (a GitHub Actions variable). A Google
 // client ID is public by design, so shipping it in the bundle is safe and saves
 // pasting a 70-character string onto every device.
@@ -113,7 +139,11 @@ async function runSync({ interactive, onStep }) {
 // both. Safe to call repeatedly — concurrent callers share one run.
 export function syncNow({ interactive = true, onStep } = {}) {
   if (inFlight) return inFlight;
-  inFlight = runSync({ interactive, onStep }).finally(() => { inFlight = null; });
+  setSyncing(true);
+  inFlight = runSync({ interactive, onStep }).finally(() => {
+    inFlight = null;
+    setSyncing(false);
+  });
   return inFlight;
 }
 
@@ -134,6 +164,13 @@ function scheduleAutoSync() {
 
 let started = false;
 
+// A launch sync competing with the app's own first paint is the most jarring
+// moment for the Google flash to land in — the user hasn't seen the app yet,
+// so it reads as the screen opening to the wrong thing. Waiting a couple of
+// seconds means it lands once there is already something on screen to read
+// it against, without meaningfully delaying when the sync itself happens.
+const LAUNCH_SYNC_DELAY_MS = 2500;
+
 // Called once at start-up: syncs on launch, after any change to the library,
 // and when the device comes back online.
 export function startAutoSync() {
@@ -146,7 +183,9 @@ export function startAutoSync() {
   if (isSyncEnabled() && navigator.onLine) {
     // Only if Google can issue a token without UI — an expired grant should
     // surface in Settings, not as a popup on launch.
-    syncNow({ interactive: false }).catch(() => {});
+    setTimeout(() => {
+      if (isSyncEnabled() && navigator.onLine) syncNow({ interactive: false }).catch(() => {});
+    }, LAUNCH_SYNC_DELAY_MS);
   }
 }
 
