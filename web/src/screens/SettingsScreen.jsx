@@ -30,6 +30,11 @@ export default function SettingsScreen() {
 
   const [clientId, setClientId] = useState('');
   const [syncEnabled, setSyncEnabled] = useState(false);
+  // Whether the sync configuration is expanded. Purely a display state, kept
+  // separate from syncEnabled (the real on/off flag) — it just decides
+  // whether the client ID field and its controls are shown, the same way the
+  // AI section stays collapsed until "Enable AI features" is switched on.
+  const [syncSectionOpen, setSyncSectionOpen] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [syncStep, setSyncStep] = useState('');
   const [lastSync, setLastSync] = useState(null);
@@ -39,8 +44,13 @@ export default function SettingsScreen() {
   useEffect(() => {
     setAiEnabled(getSetting(SETTINGS_KEYS.AI_ENABLED) === 'true');
     setApiKey(getSetting(SETTINGS_KEYS.API_KEY) || '');
-    setClientId(getSetting(SETTINGS_KEYS.GOOGLE_CLIENT_ID) || '');
-    setSyncEnabled(getSetting(SETTINGS_KEYS.SYNC_ENABLED) === 'true');
+    const savedClientId = getSetting(SETTINGS_KEYS.GOOGLE_CLIENT_ID) || '';
+    const savedSyncEnabled = getSetting(SETTINGS_KEYS.SYNC_ENABLED) === 'true';
+    setClientId(savedClientId);
+    setSyncEnabled(savedSyncEnabled);
+    // Already set up on this device — open expanded rather than hiding a
+    // working configuration behind a switch that reads as off.
+    setSyncSectionOpen(savedSyncEnabled || !!savedClientId);
     setLastSync(getLastSync());
   }, []);
 
@@ -86,18 +96,32 @@ export default function SettingsScreen() {
   };
 
   const handleDisconnect = async () => {
-    if (!confirm('Disconnect Google Drive? Your papers stay on this device and in Drive.')) return;
+    if (!confirm('Disconnect Google Drive? Your papers stay on this device and in Drive.')) return false;
     await revokeToken();
     setSetting(SETTINGS_KEYS.SYNC_ENABLED, 'false');
     setSetting(SETTINGS_KEYS.DRIVE_FILE_ID, '');
     setSyncEnabled(false);
     setSyncNotice({ type: 'success', text: 'Disconnected.' });
+    return true;
   };
 
   const toggleSync = () => {
     const next = !syncEnabled;
     setSyncEnabled(next);
     setSetting(SETTINGS_KEYS.SYNC_ENABLED, next ? 'true' : 'false');
+  };
+
+  // Collapsing the section while a real connection is live would hide it
+  // while it keeps syncing in the background, which reads as "off" when it
+  // isn't — so that case goes through the same disconnect flow as the
+  // explicit button instead of just hiding the panel.
+  const toggleSyncSection = async () => {
+    if (syncSectionOpen && syncEnabled) {
+      const disconnected = await handleDisconnect();
+      if (disconnected) setSyncSectionOpen(false);
+      return;
+    }
+    setSyncSectionOpen(v => !v);
   };
 
   const handleSave = () => {
@@ -201,95 +225,114 @@ export default function SettingsScreen() {
 
       <p className="section-title" style={{ color: 'var(--navy)' }}>☁️ Google Drive sync</p>
 
-      <p className="hint section">
-        Keeps your library in step across devices through a single
-        <code> tribulator-library.json </code>
-        file in your Drive. Tribulator can only see the file it created, never the rest of your Drive.
-      </p>
-
-      <div className="section">
-        <input
-          type="text"
-          placeholder="000000000000-xxxx.apps.googleusercontent.com"
-          value={clientId}
-          onChange={e => setClientId(e.target.value)}
-          autoCapitalize="none"
-          spellCheck={false}
-        />
-        <p className="hint">
-          {hasBuiltInClientId()
-            ? 'This app ships with a client ID — leave this blank unless you want to use your own.'
-            : 'Your Google OAuth client ID.'}{' '}
-          <button type="button" className="link-button" onClick={() => setShowSyncHelp(v => !v)}>
-            {showSyncHelp ? 'Hide setup steps' : 'How do I get one?'}
-          </button>
-        </p>
-      </div>
-
-      {showSyncHelp && (
-        <div className="card section">
-          <p className="hint" style={{ marginTop: 0 }}>
-            One-off, and free:
-          </p>
-          <ol className="hint" style={{ paddingLeft: 18, margin: '8px 0 0', lineHeight: 1.7 }}>
-            <li>At <strong>console.cloud.google.com</strong>, create a project.</li>
-            <li>Enable the <strong>Google Drive API</strong> for it.</li>
-            <li>
-              Configure the OAuth consent screen as <strong>External</strong>, and add your own
-              Google address as a test user.
-            </li>
-            <li>
-              Create an <strong>OAuth client ID</strong> of type <strong>Web application</strong>, with
-              <code> https://tribulator.hypnos.one </code> as an authorised JavaScript origin.
-            </li>
-            <li>Paste the client ID above and tap Sync now.</li>
-          </ol>
-          <p className="hint" style={{ marginBottom: 0 }}>
-            The <code>drive.file</code> scope this uses is non-sensitive, so Google does not require
-            the app to go through verification.
-          </p>
-        </div>
-      )}
-
       <div className="card section switch-row">
         <div>
-          <p className="section-title" style={{ marginBottom: 2 }}>Sync automatically</p>
-          <p className="hint">On launch, and after each change to your library</p>
+          <p className="section-title" style={{ marginBottom: 2 }}>Enable Google Drive sync</p>
+          <p className="hint">Keep your library in step across devices</p>
         </div>
         <button
           type="button"
-          className={'switch' + (syncEnabled ? ' on' : '')}
-          onClick={toggleSync}
-          disabled={!isSyncConfigured() && !clientId.trim()}
-
-          aria-label="Sync automatically"
+          className={'switch' + (syncSectionOpen ? ' on' : '')}
+          onClick={toggleSyncSection}
+          aria-label="Enable Google Drive sync"
         >
           <span className="switch-knob" />
         </button>
       </div>
 
-      <button
-        type="button"
-        className="btn btn-primary section"
-        onClick={handleSyncNow}
-        disabled={syncing || (!clientId.trim() && !hasBuiltInClientId())}
-      >
-        {syncing ? <span className="spinner" /> : <CloudUpIcon width={18} height={18} />}
-        {syncing ? (syncStep || 'Syncing...') : 'Sync now'}
-      </button>
+      {syncSectionOpen && (
+        <>
+          <p className="hint section">
+            Keeps your library in step across devices through a single
+            <code> tribulator-library.json </code>
+            file in your Drive. Tribulator can only see the file it created, never the rest of your Drive.
+          </p>
 
-      <p className="hint">Last synced {formatWhen(lastSync)}.</p>
+          <div className="section">
+            <input
+              type="password"
+              placeholder="000000000000-xxxx.apps.googleusercontent.com"
+              value={clientId}
+              onChange={e => setClientId(e.target.value)}
+              autoCapitalize="none"
+              spellCheck={false}
+            />
+            <p className="hint">
+              {hasBuiltInClientId()
+                ? 'This app ships with a client ID — leave this blank unless you want to use your own.'
+                : 'Your Google OAuth client ID.'}{' '}
+              <button type="button" className="link-button" onClick={() => setShowSyncHelp(v => !v)}>
+                {showSyncHelp ? 'Hide setup steps' : 'How do I get one?'}
+              </button>
+            </p>
+          </div>
 
-      {syncEnabled && (
-        <button type="button" className="btn btn-ghost" onClick={handleDisconnect}>
-          Disconnect Google Drive
-        </button>
-      )}
+          {showSyncHelp && (
+            <div className="card section">
+              <p className="hint" style={{ marginTop: 0 }}>
+                One-off, and free:
+              </p>
+              <ol className="hint" style={{ paddingLeft: 18, margin: '8px 0 0', lineHeight: 1.7 }}>
+                <li>At <strong>console.cloud.google.com</strong>, create a project.</li>
+                <li>Enable the <strong>Google Drive API</strong> for it.</li>
+                <li>
+                  Configure the OAuth consent screen as <strong>External</strong>, and add your own
+                  Google address as a test user.
+                </li>
+                <li>
+                  Create an <strong>OAuth client ID</strong> of type <strong>Web application</strong>, with
+                  <code> https://tribulator.hypnos.one </code> as an authorised JavaScript origin.
+                </li>
+                <li>Paste the client ID above and tap Sync now.</li>
+              </ol>
+              <p className="hint" style={{ marginBottom: 0 }}>
+                The <code>drive.file</code> scope this uses is non-sensitive, so Google does not require
+                the app to go through verification.
+              </p>
+            </div>
+          )}
 
-      {syncNotice && (
-        <p className={syncNotice.type === 'error' ? 'error-text' : 'hint'} style={{ marginTop: 12 }}>
-          {syncNotice.text}
-        </p>
+          <div className="card section switch-row">
+            <div>
+              <p className="section-title" style={{ marginBottom: 2 }}>Sync automatically</p>
+              <p className="hint">On launch, and after each change to your library</p>
+            </div>
+            <button
+              type="button"
+              className={'switch' + (syncEnabled ? ' on' : '')}
+              onClick={toggleSync}
+              disabled={!isSyncConfigured() && !clientId.trim()}
+
+              aria-label="Sync automatically"
+            >
+              <span className="switch-knob" />
+            </button>
+          </div>
+
+          <button
+            type="button"
+            className="btn btn-primary section"
+            onClick={handleSyncNow}
+            disabled={syncing || (!clientId.trim() && !hasBuiltInClientId())}
+          >
+            {syncing ? <span className="spinner" /> : <CloudUpIcon width={18} height={18} />}
+            {syncing ? (syncStep || 'Syncing...') : 'Sync now'}
+          </button>
+
+          <p className="hint">Last synced {formatWhen(lastSync)}.</p>
+
+          {syncEnabled && (
+            <button type="button" className="btn btn-ghost" onClick={handleDisconnect}>
+              Disconnect Google Drive
+            </button>
+          )}
+
+          {syncNotice && (
+            <p className={syncNotice.type === 'error' ? 'error-text' : 'hint'} style={{ marginTop: 12 }}>
+              {syncNotice.text}
+            </p>
+          )}
+        </>
       )}
 
       <p className="build-stamp">{buildLabel()}</p>

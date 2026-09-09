@@ -73,33 +73,64 @@ export function hasLiveToken() {
 // `interactive: false` asks Google for a token without showing UI, which works
 // when the user has already granted access in this browser. Automatic syncs use
 // it so they can fail quietly instead of throwing a popup at the user.
-export async function getAccessToken(rawClientId, { interactive = true } = {}) {
+//
+// `timeoutMs`, given, bounds how long that silent round-trip to Google is
+// allowed to take. Neither loadGis() nor the token request has a timeout of
+// its own, so on a poor connection they can otherwise hang indefinitely —
+// leaving an automatic sync's brief flash to Google's domain stuck on screen
+// far longer than the moment it's meant to be. A background sync would rather
+// fail cleanly and retry later than do that, so it always passes one; an
+// interactive "Sync now" click never does, since the user may be genuinely
+// taking their time in a real consent popup.
+export async function getAccessToken(rawClientId, { interactive = true, timeoutMs } = {}) {
   const problem = clientIdProblem(rawClientId);
   if (problem) throw new Error(problem);
   const clientId = normaliseClientId(rawClientId);
   if (hasLiveToken()) return cachedToken;
 
-  const google = await loadGis();
-  return new Promise((resolve, reject) => {
-    const client = google.accounts.oauth2.initTokenClient({
-      client_id: clientId,
-      scope: DRIVE_SCOPE,
-      prompt: interactive ? '' : 'none',
-      callback: response => {
-        if (!response?.access_token) {
-          return reject(new Error(response?.error_description || response?.error || 'Authorisation failed'));
-        }
-        cachedToken = response.access_token;
-        // Expire a minute early so a sync never starts on a token about to die.
-        cachedExpiry = Date.now() + (Number(response.expires_in) || 3600) * 1000 - 60_000;
-        resolve(cachedToken);
-      },
-      error_callback: error => reject(new Error(error?.type === 'popup_closed'
-        ? 'Sign-in was cancelled'
-        : error?.message || 'Authorisation failed')),
+  const attempt = (async () => {
+    const google = await loadGis();
+    return new Promise((resolve, reject) => {
+      const client = google.accounts.oauth2.initTokenClient({
+        client_id: clientId,
+        scope: DRIVE_SCOPE,
+        prompt: interactive ? '' : 'none',
+        callback: response => {
+          if (!response?.access_token) {
+            return reject(new Error(response?.error_description || response?.error || 'Authorisation failed'));
+          }
+          cachedToken = response.access_token;
+          // Expire a minute early so a sync never starts on a token about to die.
+          cachedExpiry = Date.now() + (Number(response.expires_in) || 3600) * 1000 - 60_000;
+          resolve(cachedToken);
+        },
+        error_callback: error => reject(new Error(error?.type === 'popup_closed'
+          ? 'Sign-in was cancelled'
+          : error?.message || 'Authorisation failed')),
+      });
+      client.requestAccessToken();
     });
-    client.requestAccessToken();
+  })();
+
+  if (!timeoutMs) return attempt;
+
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(
+      () => reject(new Error('Could not reach Google — check your connection and try again.')),
+      timeoutMs
+    );
   });
+  try {
+    return await Promise.race([attempt, timeout]);
+  } finally {
+    clearTimeout(timer);
+    // If the timeout won the race, the real attempt is still out there and may
+    // reject later (or resolve — harmlessly populating the token cache for next
+    // time). Either way nothing is awaiting it any more, so swallow it here
+    // rather than leaving an unhandled rejection.
+    attempt.catch(() => {});
+  }
 }
 
 export async function revokeToken() {
