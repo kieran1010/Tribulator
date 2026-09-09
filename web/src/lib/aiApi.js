@@ -62,3 +62,63 @@ Abstract: ${abstract || 'Not available'}`;
     tags: Array.isArray(parsed.tags) ? parsed.tags.filter(t => TAGS.includes(t)) : [],
   };
 }
+
+// Natural-language search over a user's own saved library. Sends only the
+// compact fields (not the full abstract) to keep the prompt a reasonable size
+// even for a large library, and asks for relevance rather than exact text
+// matches - "difficult airway in obstetrics" should find a paper whose
+// summary is about a failed intubation in a pregnant patient even if none of
+// those words appear verbatim.
+export async function searchLibraryWithAI(queryText, papers) {
+  const apiKey = requireApiKey();
+
+  const compact = papers.map(p => ({
+    id: p.id,
+    title: p.title,
+    subject: p.subject || '',
+    tags: p.tags || [],
+    summary: p.oneLineSummary || (p.abstract || '').slice(0, 220),
+  }));
+
+  const prompt = `You are helping a clinician search their own saved library of anaesthesia/critical-care papers using a natural-language question.
+
+Given the question and the JSON list of saved papers below, decide which papers are genuinely relevant to the question - not just loosely related by a shared word. Return their ids, ordered from most to least relevant. If nothing is relevant, return an empty array.
+
+Question: "${queryText}"
+
+Papers (JSON array of {id, title, subject, tags, summary}):
+${JSON.stringify(compact)}
+
+Respond in this exact JSON format with no other text:
+{
+  "matches": [
+    { "id": <paper id, exactly as given>, "reason": "one short phrase (max 12 words) explaining why this matches" }
+  ]
+}`;
+
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true',
+    },
+    body: JSON.stringify({
+      model: CLAUDE_MODEL,
+      max_tokens: 3000,
+      messages: [{ role: 'user', content: prompt }],
+    }),
+  });
+  const data = await res.json();
+  if (data.error) throw new Error(data.error.message);
+  const text = data.content?.[0]?.text || '{}';
+  const parsed = parseJsonReply(text);
+  const matches = Array.isArray(parsed.matches) ? parsed.matches : [];
+
+  // A hallucinated or malformed id must not silently corrupt the results list.
+  const byId = new Map(papers.map(p => [String(p.id), p]));
+  return matches
+    .map(m => ({ paper: byId.get(String(m.id)), reason: typeof m.reason === 'string' ? m.reason : '' }))
+    .filter(m => !!m.paper);
+}
