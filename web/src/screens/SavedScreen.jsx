@@ -160,7 +160,7 @@ export default function SavedScreen() {
         onClick={() => navigate('/detail', { state: { trial } })}
       >
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-          <span className="hint">{[item.journal, item.year].filter(Boolean).join(' · ')}</span>
+          <span className="hint">{[item.journal, item.year].filter(Boolean).join(', ')}</span>
           <button
             type="button"
             onClick={e => { e.stopPropagation(); handleDelete(item.id); }}
