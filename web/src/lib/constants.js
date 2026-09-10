@@ -41,6 +41,26 @@ export const STUDY_TYPES = [
   { id: 'other', label: 'Other', pubmedPt: [] },
 ];
 
+// How a saved paper's PubMed publication types (e.g. ["Journal Article",
+// "Randomized Controlled Trial"]) are collapsed into one filterable category
+// for the Saved screen. Order matters — checked top to bottom, so a paper
+// tagged both "Review" and "Systematic Review" lands in the more specific
+// bucket. "Original Research" is the fallback PubMed itself uses: a plain
+// research article gets no publication type beyond "Journal Article".
+export const PUBLICATION_TYPE_RULES = [
+  { label: 'Systematic Review / Meta-analysis', match: ['Meta-Analysis', 'Systematic Review'] },
+  { label: 'Randomised Controlled Trial', match: ['Randomized Controlled Trial'] },
+  { label: 'Clinical Trial', match: ['Clinical Trial', 'Controlled Clinical Trial', 'Pragmatic Clinical Trial'], prefix: 'Clinical Trial' },
+  { label: 'Guideline', match: ['Practice Guideline', 'Guideline'] },
+  { label: 'Case Report', match: ['Case Reports'] },
+  { label: 'Commentary / Editorial', match: ['Comment', 'Editorial', 'Letter', 'News'] },
+  { label: 'Review', match: ['Review'] },
+  { label: 'Observational Study', match: ['Observational Study', 'Comparative Study', 'Multicenter Study'] },
+];
+
+// Display order for the Saved screen's type filter chips.
+export const PUBLICATION_TYPES = [...PUBLICATION_TYPE_RULES.map(r => r.label), 'Original Research'];
+
 export const DATE_FILTERS = ['Last Month', 'Last Year', 'Last 5 Years', 'All Time'];
 export const QUARTILE_FILTERS = ['Any', 'Q4', 'Q3', 'Q2', 'Q1'];
 
@@ -64,7 +84,7 @@ export const DEFAULT_FILTERS = {
 // The paper fields that are user data (as opposed to sync bookkeeping). Single
 // source of truth for what gets exported, imported and merged.
 export const PAPER_FIELDS = [
-  'title', 'reference', 'journal', 'url', 'year', 'subject', 'abstract',
+  'title', 'reference', 'journal', 'paperType', 'url', 'year', 'subject', 'abstract',
   'dateEntered', 'oneLineSummary', 'fullSummary', 'tags',
 ];
 

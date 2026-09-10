@@ -1,4 +1,4 @@
-import { JOURNAL_QUARTILES } from './constants';
+import { JOURNAL_QUARTILES, PUBLICATION_TYPE_RULES } from './constants';
 
 export function decodeHtmlEntities(text) {
   if (!text) return text;
@@ -69,6 +69,22 @@ export function buildVancouverReference(trial, details) {
 
   const parts = [authors, title, locator].map(p => p.trim()).filter(Boolean);
   return parts.length ? `${parts.join('. ')}.` : '';
+}
+
+// Collapses PubMed's publication-type list (e.g. ["Journal Article",
+// "Randomized Controlled Trial"]) into one category for the Saved screen's
+// type filter, via PUBLICATION_TYPE_RULES. Empty/unknown input returns ''
+// rather than guessing — only a real "Journal Article" with nothing more
+// specific attached counts as "Original Research".
+export function classifyPublicationType(pubTypes) {
+  const types = (pubTypes || []).filter(Boolean);
+  if (types.length === 0) return '';
+  for (const rule of PUBLICATION_TYPE_RULES) {
+    if (types.some(t => rule.match.includes(t) || (rule.prefix && t.startsWith(rule.prefix)))) {
+      return rule.label;
+    }
+  }
+  return 'Original Research';
 }
 
 export function getJournalQuartile(journalName) {

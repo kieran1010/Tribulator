@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { fetchFullDetails } from '../lib/pubmedApi';
 import { fetchAISummary } from '../lib/aiApi';
-import { buildVancouverReference, getJournalQuartile } from '../lib/format';
+import { buildVancouverReference, getJournalQuartile, classifyPublicationType } from '../lib/format';
 import { isAiEnabled } from '../lib/storage';
 import { getAllPapers, addPaper, putPaper, deletePaper, findMatchingPaper } from '../lib/db';
 import { BookmarkIcon, ExternalLinkIcon, SparklesIcon, ChevronDown, ChevronLeftIcon } from '../components/Icon';
@@ -78,6 +78,7 @@ export default function DetailScreen() {
       title: trial.title,
       reference: buildVancouverReference(trial, details || {}),
       journal: trial.journal || details?.journal || '',
+      paperType: classifyPublicationType(details?.pubTypes),
       url: trial.pubmedId ? `https://pubmed.ncbi.nlm.nih.gov/${trial.pubmedId}/` : (trial.url || ''),
       year: trial.pubdate ? trial.pubdate.split(' ')[0] : '',
       subject: aiSummary?.subject || '',
