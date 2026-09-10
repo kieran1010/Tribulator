@@ -35,6 +35,8 @@ export default function SavedScreen() {
   const [selectedTags, setSelectedTags] = useState(() => new Set());
   const [sortMode, setSortMode] = useState('newest');
 
+  const [toolsOpen, setToolsOpen] = useState(false);
+
   const [aiMode, setAiMode] = useState(false);
   const [aiQuery, setAiQuery] = useState('');
   const [aiSearching, setAiSearching] = useState(false);
@@ -145,7 +147,7 @@ export default function SavedScreen() {
       id: item.id,
       pubmedId: pubmedIdFromUrl(item.url),
       title: item.title,
-      journal: '',
+      journal: item.journal || '',
       pubdate: item.year,
       url: item.url,
       quartile: null,
@@ -158,7 +160,7 @@ export default function SavedScreen() {
         onClick={() => navigate('/detail', { state: { trial } })}
       >
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-          <span className="hint">{item.year}</span>
+          <span className="hint">{[item.journal, item.year].filter(Boolean).join(' · ')}</span>
           <button
             type="button"
             onClick={e => { e.stopPropagation(); handleDelete(item.id); }}
@@ -168,7 +170,6 @@ export default function SavedScreen() {
           </button>
         </div>
         <p style={{ fontWeight: 600, margin: '0 0 4px', lineHeight: 1.4 }}>{item.title}</p>
-        <p className="hint" style={{ fontStyle: 'italic', margin: '0 0 6px' }}>{item.reference}</p>
         {reason && (
           <p className="hint" style={{ margin: '0 0 6px', color: 'var(--teal)', fontWeight: 500 }}>
             <SparklesIcon width={12} height={12} style={{ verticalAlign: '-1px', marginRight: 4 }} />
@@ -213,7 +214,16 @@ export default function SavedScreen() {
         )}
       </div>
 
-      {aiAvailable && papers.length > 0 && (
+      {papers.length > 0 && (
+        <div className="section" style={{ display: 'flex', justifyContent: 'flex-end' }}>
+          <button type="button" className="btn btn-ghost" style={{ paddingRight: 0 }} onClick={() => setToolsOpen(v => !v)}>
+            Search &amp; filter
+            <ChevronDown width={14} height={14} style={{ transform: toolsOpen ? 'rotate(180deg)' : 'none' }} />
+          </button>
+        </div>
+      )}
+
+      {toolsOpen && aiAvailable && papers.length > 0 && (
         <div className="section">
           <button type="button" className="btn btn-ghost" style={{ paddingLeft: 0 }} onClick={() => setAiMode(v => !v)}>
             <SparklesIcon width={16} height={16} />
@@ -265,7 +275,7 @@ export default function SavedScreen() {
         </>
       ) : (
         <>
-          {availableTags.length > 0 && (
+          {toolsOpen && availableTags.length > 0 && (
             <div className="chips section">
               {availableTags.map(tag => (
                 <button
@@ -284,18 +294,20 @@ export default function SavedScreen() {
             <p className="hint" style={{ margin: 0 }}>
               {filtered.length} of {papers.length} saved paper{papers.length !== 1 ? 's' : ''}
             </p>
-            <div className="chips">
-              {SORT_OPTIONS.map(opt => (
-                <button
-                  key={opt.id}
-                  type="button"
-                  className={'chip' + (sortMode === opt.id ? ' active' : '')}
-                  onClick={() => setSortMode(opt.id)}
-                >
-                  {opt.label}
-                </button>
-              ))}
-            </div>
+            {toolsOpen && (
+              <div className="chips">
+                {SORT_OPTIONS.map(opt => (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    className={'chip' + (sortMode === opt.id ? ' active' : '')}
+                    onClick={() => setSortMode(opt.id)}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
           {filtered.length === 0 && (
