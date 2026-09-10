@@ -64,7 +64,7 @@ export const DEFAULT_FILTERS = {
 // The paper fields that are user data (as opposed to sync bookkeeping). Single
 // source of truth for what gets exported, imported and merged.
 export const PAPER_FIELDS = [
-  'title', 'reference', 'url', 'year', 'subject', 'abstract',
+  'title', 'reference', 'journal', 'url', 'year', 'subject', 'abstract',
   'dateEntered', 'oneLineSummary', 'fullSummary', 'tags',
 ];
 

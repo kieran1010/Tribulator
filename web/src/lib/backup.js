@@ -34,6 +34,7 @@ export async function exportLibraryToFile() {
 const FIELD_ALIASES = {
   title: ['title'],
   reference: ['reference'],
+  journal: ['journal'],
   url: ['url'],
   year: ['year'],
   subject: ['subject'],
@@ -71,6 +72,7 @@ function normalizePaperRecord(raw) {
   const record = {
     title: paper.title || '',
     reference: paper.reference || '',
+    journal: paper.journal || '',
     url: paper.url || '',
     year: paper.year ? String(paper.year) : '',
     subject: paper.subject || '',
