@@ -5,7 +5,7 @@ import { exportLibraryToFile } from '../lib/backup';
 import { getLastSync, isSyncEnabled } from '../lib/sync';
 import { SETTINGS_KEYS, getSetting, isAiEnabled } from '../lib/storage';
 import { searchLibraryWithAI } from '../lib/aiApi';
-import { TAGS } from '../lib/constants';
+import { TAGS, PUBLICATION_TYPES } from '../lib/constants';
 import { SearchIcon, TrashIcon, BookmarkIcon, XIcon, SparklesIcon, ChevronDown } from '../components/Icon';
 
 let hasPromptedBackupThisSession = false;
@@ -33,6 +33,7 @@ export default function SavedScreen() {
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState('');
   const [selectedTags, setSelectedTags] = useState(() => new Set());
+  const [selectedTypes, setSelectedTypes] = useState(() => new Set());
   const [sortMode, setSortMode] = useState('newest');
 
   const [toolsOpen, setToolsOpen] = useState(false);
@@ -91,6 +92,14 @@ export default function SavedScreen() {
     return TAGS.filter(t => inUse.has(t));
   }, [papers]);
 
+  // Only types actually in use, so the chip row scales with the library
+  // instead of always showing all 9 curated categories.
+  const availableTypes = useMemo(() => {
+    const inUse = new Set();
+    papers.forEach(p => { if (p.paperType) inUse.add(p.paperType); });
+    return PUBLICATION_TYPES.filter(t => inUse.has(t));
+  }, [papers]);
+
   const toggleTag = tag => {
     setSelectedTags(prev => {
       const next = new Set(prev);
@@ -100,9 +109,18 @@ export default function SavedScreen() {
     });
   };
 
+  const toggleType = type => {
+    setSelectedTypes(prev => {
+      const next = new Set(prev);
+      if (next.has(type)) next.delete(type);
+      else next.add(type);
+      return next;
+    });
+  };
+
   const textFiltered = query.trim()
     ? papers.filter(p =>
-        [p.title, p.reference, p.subject, p.abstract, p.oneLineSummary, p.fullSummary, p.year, ...(p.tags || [])]
+        [p.title, p.reference, p.subject, p.abstract, p.oneLineSummary, p.fullSummary, p.year, p.paperType, ...(p.tags || [])]
           .join(' ')
           .toLowerCase()
           .includes(query.trim().toLowerCase())
@@ -113,7 +131,11 @@ export default function SavedScreen() {
     ? textFiltered.filter(p => (p.tags || []).some(t => selectedTags.has(t)))
     : textFiltered;
 
-  const filtered = sortPapers(tagFiltered, sortMode);
+  const typeFiltered = selectedTypes.size > 0
+    ? tagFiltered.filter(p => selectedTypes.has(p.paperType))
+    : tagFiltered;
+
+  const filtered = sortPapers(typeFiltered, sortMode);
 
   const handleAiSearch = async () => {
     if (!aiQuery.trim()) return;
@@ -275,6 +297,21 @@ export default function SavedScreen() {
         </>
       ) : (
         <>
+          {toolsOpen && availableTypes.length > 0 && (
+            <div className="chips section">
+              {availableTypes.map(type => (
+                <button
+                  key={type}
+                  type="button"
+                  className={'chip' + (selectedTypes.has(type) ? ' active' : '')}
+                  onClick={() => toggleType(type)}
+                >
+                  {type}
+                </button>
+              ))}
+            </div>
+          )}
+
           {toolsOpen && availableTags.length > 0 && (
             <div className="chips section">
               {availableTags.map(tag => (
@@ -313,9 +350,9 @@ export default function SavedScreen() {
           {filtered.length === 0 && (
             <div className="empty-state">
               <BookmarkIcon width={40} height={40} style={{ color: 'var(--border)', marginBottom: 8 }} />
-              <p style={{ fontWeight: 600 }}>{query || selectedTags.size > 0 ? 'No results found' : 'No saved papers yet'}</p>
+              <p style={{ fontWeight: 600 }}>{query || selectedTags.size > 0 || selectedTypes.size > 0 ? 'No results found' : 'No saved papers yet'}</p>
               <p className="hint">
-                {query || selectedTags.size > 0 ? 'Try a different search term or tag' : 'Tap the bookmark icon on any paper to save it here'}
+                {query || selectedTags.size > 0 || selectedTypes.size > 0 ? 'Try a different search term, tag or type' : 'Tap the bookmark icon on any paper to save it here'}
               </p>
             </div>
           )}

@@ -261,6 +261,9 @@ export async function fetchFullDetails(pubmedId) {
     pages: art?.pages,
     pubdate: art?.pubdate,
     doi: art?.elocationid,
+    // Raw PubMed publication types (e.g. ["Journal Article", "Review"]) —
+    // classifyPublicationType() in format.js collapses these into one category.
+    pubTypes: art?.pubtype || [],
     abstract,
   };
 }
