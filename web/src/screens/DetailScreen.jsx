@@ -77,6 +77,7 @@ export default function DetailScreen() {
     const paper = {
       title: trial.title,
       reference: buildVancouverReference(trial, details || {}),
+      journal: trial.journal || details?.journal || '',
       url: trial.pubmedId ? `https://pubmed.ncbi.nlm.nih.gov/${trial.pubmedId}/` : (trial.url || ''),
       year: trial.pubdate ? trial.pubdate.split(' ')[0] : '',
       subject: aiSummary?.subject || '',
