@@ -178,6 +178,17 @@ export function parsePmid(input) {
   return match ? match[1] : null;
 }
 
+// A PubMed article page URL (shared from the PubMed app, or a browser's share
+// sheet) carries the PMID as its path segment rather than as bare digits, so
+// parsePmid's whole-string match misses it. Covers both the current domain
+// and the pre-2018 legacy path some old links/bookmarks still use.
+const PUBMED_URL_PMID_PATTERN = /(?:pubmed\.ncbi\.nlm\.nih\.gov\/|ncbi\.nlm\.nih\.gov\/pubmed\/)(\d{1,9})(?:[/?]|$)/i;
+
+export function extractPmidFromUrl(input) {
+  const match = (input || '').trim().match(PUBMED_URL_PMID_PATTERN);
+  return match ? match[1] : null;
+}
+
 // Resolves a PMID straight to a trial, or null if no such record exists.
 export async function fetchTrialByPmid(pmid) {
   const [trial] = await pmidsToTrials([pmid]);

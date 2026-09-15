@@ -39,6 +39,19 @@ export default defineConfig({
           { src: 'icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
           { src: 'icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
         ],
+        // Lets Android's share sheet offer Tribulator for a shared PubMed/journal
+        // link or a copied citation. A plain GET to '/' needs no service worker
+        // handler — App.jsx picks the params off window.location.search on load.
+        share_target: {
+          action: '/',
+          method: 'GET',
+          enctype: 'application/x-www-form-urlencoded',
+          params: {
+            title: 'title',
+            text: 'text',
+            url: 'url',
+          },
+        },
       },
       workbox: {
         // Precache the app shell only. PubMed/Claude/Apps Script calls are all

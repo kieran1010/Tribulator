@@ -1,4 +1,4 @@
-import { parseDoi, parsePmid, extractDoi } from './pubmedApi';
+import { parseDoi, parsePmid, extractDoi, extractPmidFromUrl } from './pubmedApi';
 
 // A paper title is nearly always longer than a keyword query. Below this the
 // input is treated as a topic search unless it carries a citation marker. The
@@ -55,7 +55,7 @@ export function classifyQuery(rawInput) {
   const doi = parseDoi(input);
   if (doi) return { mode: 'lookup', kind: 'doi', confidence: 'high', value: doi, hint: HINTS.doi };
 
-  const pmid = parsePmid(input);
+  const pmid = parsePmid(input) || extractPmidFromUrl(input);
   if (pmid) return { mode: 'lookup', kind: 'pmid', confidence: 'high', value: pmid, hint: HINTS.pmid };
 
   // A DOI buried in a pasted reference is still the most precise handle there is.

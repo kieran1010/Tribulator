@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { HashRouter, Routes, Route, Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { startAutoSync } from './lib/sync';
+import { DEFAULT_FILTERS } from './lib/constants';
 import Header from './components/Header';
 import BottomNav from './components/BottomNav';
 import UpdatePrompt from './components/UpdatePrompt';
@@ -14,10 +15,32 @@ import OptimiseScreen from './screens/OptimiseScreen';
 const TAB_ORDER = ['/search', '/saved', '/settings'];
 const SWIPE_MIN_DISTANCE = 60;
 
+// The Android share sheet lands here as a plain GET to the site root (see the
+// share_target manifest entry in vite.config.js), carrying whatever the
+// source app supplied as query params — never all three at once in practice.
+// A shared page's url is the most reliable handle (it's where the PMID/DOI
+// lives), so it's preferred over the free-form text or title.
+function readSharedQuery() {
+  const params = new URLSearchParams(window.location.search);
+  const shared = params.get('url') || params.get('text') || params.get('title');
+  return shared?.trim() || null;
+}
+
 function Layout() {
   const location = useLocation();
   const navigate = useNavigate();
   const touchStart = useRef(null);
+
+  useEffect(() => {
+    const query = readSharedQuery();
+    if (!query) return;
+    // Strip the share params so refreshing or navigating back doesn't replay
+    // the same lookup.
+    window.history.replaceState(null, '', window.location.pathname + window.location.hash);
+    navigate('/results', { state: { query, filters: DEFAULT_FILTERS, mode: 'lookup' } });
+    // Runs once, on the initial load that a share can land on.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleTouchStart = e => {
     const t = e.touches[0];
