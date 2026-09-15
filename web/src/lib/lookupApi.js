@@ -2,6 +2,7 @@ import {
   parseDoi,
   extractDoi,
   parsePmid,
+  extractPmidFromUrl,
   fetchTrialByPmid,
   searchPubmedIdByDoi,
   searchPubmedByTitle,
@@ -60,7 +61,7 @@ export async function resolveLookup(rawInput, onStep) {
   const input = (rawInput || '').trim();
   if (!input) return { matchedVia: null, trial: null, alternatives: [] };
 
-  const pmid = parsePmid(input);
+  const pmid = parsePmid(input) || extractPmidFromUrl(input);
   if (pmid) {
     onStep?.('Fetching PubMed record...');
     const trial = await fetchTrialByPmid(pmid);
