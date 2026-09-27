@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import brandMark from '../assets/brand-mark-transparent.png';
 import { onSyncStateChange, isSyncing } from '../lib/sync';
 import { CloudUpIcon } from './Icon';
 
@@ -10,7 +9,10 @@ export default function Header() {
   return (
     <header className="app-header">
       <a href="https://hypnos.one" className="brand">
-        <img src={brandMark} alt="" className="brand-icon" />
+        {/* Hypnos Medical moon: two-circle construction from the brand kit */}
+        <svg className="brand-icon" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M12.2 0A12 12 0 1 0 23.96 13.29A9.14 9.14 0 0 1 12.2 0Z" fill="currentColor" />
+        </svg>
         <div className="brand-text">
           <span className="brand-hypnos">Hypnos</span>
           <span className="brand-medical">MEDICAL</span>
