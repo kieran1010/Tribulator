@@ -25,7 +25,7 @@ export default defineConfig({
       // leaves the user looking at old code with no way to tell. Asking is
       // both faster and honest about what is happening.
       registerType: 'prompt',
-      includeAssets: ['favicon.png', 'apple-touch-icon.png'],
+      includeAssets: ['favicon.ico', 'favicon.svg', 'favicon-96.png', 'apple-touch-icon.png'],
       manifest: {
         name: 'Tribulator',
         short_name: 'Tribulator',
@@ -57,7 +57,7 @@ export default defineConfig({
         // Precache the app shell only. PubMed/Claude/Apps Script calls are all
         // cross-origin and intentionally never cached — clinical search results
         // and AI summaries must always come from the network, never go stale.
-        globPatterns: ['**/*.{js,css,html,png,svg}'],
+        globPatterns: ['**/*.{js,css,html,png,svg,woff2}'],
       },
     }),
   ],
