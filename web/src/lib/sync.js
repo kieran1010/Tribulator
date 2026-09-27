@@ -42,18 +42,10 @@ function setSyncing(value) {
   });
 }
 
-// A client ID baked in at build time (a GitHub Actions variable). A Google
-// client ID is public by design, so shipping it in the bundle is safe and saves
-// pasting a 70-character string onto every device.
-const BUILD_CLIENT_ID = normaliseClientId(import.meta.env?.VITE_GOOGLE_CLIENT_ID || '');
-
-export function hasBuiltInClientId() {
-  return !!BUILD_CLIENT_ID;
-}
-
-// Anything pasted on this device overrides the built-in one.
+// The user's own Google OAuth client ID, pasted in Settings on each device.
+// Nothing is built into the app.
 export function getClientId() {
-  return getSetting(SETTINGS_KEYS.GOOGLE_CLIENT_ID) || BUILD_CLIENT_ID;
+  return normaliseClientId(getSetting(SETTINGS_KEYS.GOOGLE_CLIENT_ID) || '');
 }
 
 export function isSyncConfigured() {

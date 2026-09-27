@@ -13,9 +13,6 @@ export default defineConfig({
     // fix isn't working" and "you're on a stale cache".
     'import.meta.env.VITE_BUILD_ID': JSON.stringify((process.env.GITHUB_SHA || 'dev').slice(0, 7)),
     'import.meta.env.VITE_BUILD_TIME': JSON.stringify(new Date().toISOString()),
-    // A Google client ID is public by design, so it ships in the bundle and
-    // saves pasting it onto every device. Empty is fine: Settings then asks.
-    'import.meta.env.VITE_GOOGLE_CLIENT_ID': JSON.stringify(process.env.VITE_GOOGLE_CLIENT_ID || ''),
   },
   plugins: [
     react(),
