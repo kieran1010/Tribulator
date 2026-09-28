@@ -2,8 +2,8 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { SETTINGS_KEYS, getSetting, setSetting } from '../lib/storage';
 import { exportLibraryToFile, importLibraryFromFile } from '../lib/backup';
-import { syncNow, getLastSync, isSyncConfigured, hasBuiltInClientId } from '../lib/sync';
-import { revokeToken, normaliseClientId, clientIdProblem } from '../lib/googleDrive';
+import { syncNow, getLastSync, isSyncConfigured } from '../lib/sync';
+import { revokeToken } from '../lib/googleDrive';
 import { buildLabel } from '../lib/build';
 import { CloudDownIcon, CloudUpIcon, CheckCircleIcon, SparklesIcon } from '../components/Icon';
 
@@ -28,54 +28,37 @@ export default function SettingsScreen() {
   const [notice, setNotice] = useState(null);
   const fileInputRef = useRef(null);
 
-  const [clientId, setClientId] = useState('');
   const [syncEnabled, setSyncEnabled] = useState(false);
   // Whether the sync configuration is expanded. Purely a display state, kept
   // separate from syncEnabled (the real on/off flag) — it just decides
-  // whether the client ID field and its controls are shown, the same way the
+  // whether the sync controls are shown, the same way the
   // AI section stays collapsed until "Enable AI features" is switched on.
   const [syncSectionOpen, setSyncSectionOpen] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [syncStep, setSyncStep] = useState('');
   const [lastSync, setLastSync] = useState(null);
   const [syncNotice, setSyncNotice] = useState(null);
-  const [showSyncHelp, setShowSyncHelp] = useState(false);
 
   useEffect(() => {
     setAiEnabled(getSetting(SETTINGS_KEYS.AI_ENABLED) === 'true');
     setApiKey(getSetting(SETTINGS_KEYS.API_KEY) || '');
-    const savedClientId = getSetting(SETTINGS_KEYS.GOOGLE_CLIENT_ID) || '';
     const savedSyncEnabled = getSetting(SETTINGS_KEYS.SYNC_ENABLED) === 'true';
-    setClientId(savedClientId);
     setSyncEnabled(savedSyncEnabled);
     // Already set up on this device — open expanded rather than hiding a
     // working configuration behind a switch that reads as off.
-    setSyncSectionOpen(savedSyncEnabled || !!savedClientId);
+    setSyncSectionOpen(savedSyncEnabled);
     setLastSync(getLastSync());
   }, []);
 
   const handleSyncNow = async () => {
-    // An empty field with a client ID built into the app is not an error —
-    // it just means this device is happy with the built-in one.
-    const typed = normaliseClientId(clientId);
-    if (typed) {
-      // Check it here so an obvious problem reads as a sentence rather than as
-      // Google's "invalid_client" error page.
-      const problem = clientIdProblem(typed);
-      if (problem) {
-        setSyncNotice({ type: 'error', text: problem });
-        return;
-      }
-    } else if (!hasBuiltInClientId()) {
-      setSyncNotice({ type: 'error', text: 'Paste your Google OAuth client ID first.' });
+    if (!isSyncConfigured()) {
+      setSyncNotice({ type: 'error', text: "Google Drive sync isn't set up in this version of Tribulator." });
       return;
     }
 
     setSyncing(true);
     setSyncNotice(null);
     try {
-      setClientId(typed);
-      setSetting(SETTINGS_KEYS.GOOGLE_CLIENT_ID, typed);
       const result = await syncNow({ interactive: true, onStep: setSyncStep });
       setLastSync(result.at);
       // Switching sync on only after the first success means auto-sync never
@@ -248,48 +231,8 @@ export default function SettingsScreen() {
             file in your Drive. Tribulator can only see the file it created, never the rest of your Drive.
           </p>
 
-          <div className="section">
-            <input
-              type="password"
-              placeholder="000000000000-xxxx.apps.googleusercontent.com"
-              value={clientId}
-              onChange={e => setClientId(e.target.value)}
-              autoCapitalize="none"
-              spellCheck={false}
-            />
-            <p className="hint">
-              {hasBuiltInClientId()
-                ? 'This app ships with a client ID — leave this blank unless you want to use your own.'
-                : 'Your Google OAuth client ID.'}{' '}
-              <button type="button" className="link-button" onClick={() => setShowSyncHelp(v => !v)}>
-                {showSyncHelp ? 'Hide setup steps' : 'How do I get one?'}
-              </button>
-            </p>
-          </div>
-
-          {showSyncHelp && (
-            <div className="card section">
-              <p className="hint" style={{ marginTop: 0 }}>
-                One-off, and free:
-              </p>
-              <ol className="hint" style={{ paddingLeft: 18, margin: '8px 0 0', lineHeight: 1.7 }}>
-                <li>At <strong>console.cloud.google.com</strong>, create a project.</li>
-                <li>Enable the <strong>Google Drive API</strong> for it.</li>
-                <li>
-                  Configure the OAuth consent screen as <strong>External</strong>, and add your own
-                  Google address as a test user.
-                </li>
-                <li>
-                  Create an <strong>OAuth client ID</strong> of type <strong>Web application</strong>, with
-                  <code> https://tribulator.hypnos.one </code> as an authorised JavaScript origin.
-                </li>
-                <li>Paste the client ID above and tap Sync now.</li>
-              </ol>
-              <p className="hint" style={{ marginBottom: 0 }}>
-                The <code>drive.file</code> scope this uses is non-sensitive, so Google does not require
-                the app to go through verification.
-              </p>
-            </div>
+          {!isSyncConfigured() && (
+            <p className="hint section">Google Drive sync isn't set up in this version of Tribulator.</p>
           )}
 
           <div className="card section switch-row">
@@ -301,7 +244,7 @@ export default function SettingsScreen() {
               type="button"
               className={'switch' + (syncEnabled ? ' on' : '')}
               onClick={toggleSync}
-              disabled={!isSyncConfigured() && !clientId.trim()}
+              disabled={!isSyncConfigured()}
 
               aria-label="Sync automatically"
             >
@@ -313,7 +256,7 @@ export default function SettingsScreen() {
             type="button"
             className="btn btn-primary section"
             onClick={handleSyncNow}
-            disabled={syncing || (!clientId.trim() && !hasBuiltInClientId())}
+            disabled={syncing || !isSyncConfigured()}
           >
             {syncing ? <span className="spinner" /> : <CloudUpIcon width={18} height={18} />}
             {syncing ? (syncStep || 'Syncing...') : 'Sync now'}
