@@ -1,6 +1,6 @@
 import { getAllRecords, applyMergedRecords, purgeExpiredTombstones, onMutation } from './db';
 import { mergeLibraries, toSyncDocument, papersFromSyncDocument } from './merge';
-import { SETTINGS_KEYS, getSetting, setSetting } from './storage';
+import { SETTINGS_KEYS, getSetting, setSetting, removeSetting } from './storage';
 import {
   normaliseClientId,
   getAccessToken,
@@ -42,18 +42,16 @@ function setSyncing(value) {
   });
 }
 
-// A client ID baked in at build time (a GitHub Actions variable). A Google
-// client ID is public by design, so shipping it in the bundle is safe and saves
-// pasting a 70-character string onto every device.
+// The Hypnos Medical OAuth client ID, shared across the Hypnos suite and baked
+// in at build time (a GitHub Actions variable). A Google client ID is public by
+// design, so shipping it in the bundle is safe. There is no per-user override.
 const BUILD_CLIENT_ID = normaliseClientId(import.meta.env?.VITE_GOOGLE_CLIENT_ID || '');
 
-export function hasBuiltInClientId() {
-  return !!BUILD_CLIENT_ID;
-}
+// Earlier versions let a client ID be pasted in Settings; drop any left behind.
+removeSetting('tribulator_google_client_id');
 
-// Anything pasted on this device overrides the built-in one.
 export function getClientId() {
-  return getSetting(SETTINGS_KEYS.GOOGLE_CLIENT_ID) || BUILD_CLIENT_ID;
+  return BUILD_CLIENT_ID;
 }
 
 export function isSyncConfigured() {
@@ -89,7 +87,7 @@ const NON_INTERACTIVE_TOKEN_TIMEOUT_MS = 8000;
 
 async function runSync({ interactive, onStep }) {
   const clientId = getClientId();
-  if (!clientId) throw new Error('Add your Google client ID in Settings first');
+  if (!clientId) throw new Error("Google Drive sync isn't set up in this version of Tribulator.");
 
   // A device that's fully offline should fail this immediately and quietly
   // rather than reaching for Google at all — there's nothing subtle to make
