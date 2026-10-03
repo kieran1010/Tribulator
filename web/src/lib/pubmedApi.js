@@ -189,6 +189,31 @@ export function extractPmidFromUrl(input) {
   return match ? match[1] : null;
 }
 
+// A PubMed Central article URL (pmc.ncbi.nlm.nih.gov/articles/PMC123/, or the
+// older ncbi.nlm.nih.gov/pmc/articles/PMC123/) or a bare "PMC123" id. PMC ids
+// are a different number space from PMIDs, so they need converting first.
+const PMCID_PATTERN = /^(?:pmcid\s*:?\s*)?PMC(\d{1,9})$/i;
+const PMC_URL_PATTERN = /ncbi\.nlm\.nih\.gov\/(?:pmc\/)?articles\/(?:PMC)?(\d{1,9})(?:[/?#.]|$)/i;
+
+// Returns the numeric part of a PMCID (no "PMC" prefix), else null.
+export function extractPmcid(input) {
+  const trimmed = (input || '').trim();
+  const match = trimmed.match(PMCID_PATTERN) || trimmed.match(PMC_URL_PATTERN);
+  return match ? match[1] : null;
+}
+
+// Maps a PMC id to its PMID via ELink (same eutils host and rate-limit queue as
+// everything else). Returns null when the PMC record has no PubMed record.
+export async function pmcidToPmid(pmcid) {
+  const url = `https://eutils.ncbi.nlm.nih.gov/entrez/eutils/elink.fcgi?dbfrom=pmc&db=pubmed&id=${pmcid}&retmode=json`;
+  const res = await fetchEutils(url);
+  const data = await res.json();
+  const sets = data.linksets?.[0]?.linksetdbs || [];
+  const link = sets.find(s => s.linkname === 'pmc_pubmed') || sets[0];
+  const id = link?.links?.[0];
+  return id ? String(id.id ?? id) : null;
+}
+
 // Resolves a PMID straight to a trial, or null if no such record exists.
 export async function fetchTrialByPmid(pmid) {
   const [trial] = await pmidsToTrials([pmid]);
