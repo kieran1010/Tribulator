@@ -1,4 +1,4 @@
-import { parseDoi, parsePmid, extractDoi, extractPmidFromUrl } from './pubmedApi';
+import { parseDoi, parsePmid, extractDoi, extractPmidFromUrl, extractPmcid } from './pubmedApi';
 
 // A paper title is nearly always longer than a keyword query. Below this the
 // input is treated as a topic search unless it carries a citation marker. The
@@ -39,6 +39,7 @@ const CITATION_MARKERS = [
 const HINTS = {
   doi: 'Detected a DOI — will look up that exact paper.',
   pmid: 'Detected a PubMed ID — will open that record.',
+  pmcid: 'Detected a PubMed Central link — will open that paper.',
   citation: 'Looks like a reference — will search for that paper.',
   title: 'Looks like a paper title — will search for that paper.',
   query: 'PubMed search syntax — will run a topic search.',
@@ -57,6 +58,10 @@ export function classifyQuery(rawInput) {
 
   const pmid = parsePmid(input) || extractPmidFromUrl(input);
   if (pmid) return { mode: 'lookup', kind: 'pmid', confidence: 'high', value: pmid, hint: HINTS.pmid };
+
+  if (extractPmcid(input)) {
+    return { mode: 'lookup', kind: 'pmcid', confidence: 'high', value: input, hint: HINTS.pmcid };
+  }
 
   // A DOI buried in a pasted reference is still the most precise handle there is.
   const embeddedDoi = extractDoi(input);

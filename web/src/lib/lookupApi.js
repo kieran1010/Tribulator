@@ -3,6 +3,8 @@ import {
   extractDoi,
   parsePmid,
   extractPmidFromUrl,
+  extractPmcid,
+  pmcidToPmid,
   fetchTrialByPmid,
   searchPubmedIdByDoi,
   searchPubmedByTitle,
@@ -61,7 +63,14 @@ export async function resolveLookup(rawInput, onStep) {
   const input = (rawInput || '').trim();
   if (!input) return { matchedVia: null, trial: null, alternatives: [] };
 
-  const pmid = parsePmid(input) || extractPmidFromUrl(input);
+  let pmid = parsePmid(input) || extractPmidFromUrl(input);
+  if (!pmid) {
+    const pmcid = extractPmcid(input);
+    if (pmcid) {
+      onStep?.('Converting PMC ID...');
+      pmid = await pmcidToPmid(pmcid);
+    }
+  }
   if (pmid) {
     onStep?.('Fetching PubMed record...');
     const trial = await fetchTrialByPmid(pmid);
