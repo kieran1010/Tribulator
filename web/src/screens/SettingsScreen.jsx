@@ -45,8 +45,9 @@ export default function SettingsScreen() {
     const savedSyncEnabled = getSetting(SETTINGS_KEYS.SYNC_ENABLED) === 'true';
     setSyncEnabled(savedSyncEnabled);
     // Already set up on this device — open expanded rather than hiding a
-    // working configuration behind a switch that reads as off.
-    setSyncSectionOpen(savedSyncEnabled);
+    // working configuration behind a switch that reads as off. A linked Drive
+    // file counts even if auto-sync was switched off inside the panel.
+    setSyncSectionOpen(savedSyncEnabled || !!getSetting(SETTINGS_KEYS.DRIVE_FILE_ID));
     setLastSync(getLastSync());
   }, []);
 
@@ -99,12 +100,24 @@ export default function SettingsScreen() {
   // isn't — so that case goes through the same disconnect flow as the
   // explicit button instead of just hiding the panel.
   const toggleSyncSection = async () => {
-    if (syncSectionOpen && syncEnabled) {
-      const disconnected = await handleDisconnect();
-      if (disconnected) setSyncSectionOpen(false);
+    if (syncSectionOpen) {
+      // Still connected (auto-sync on, or a Drive file linked with auto-sync
+      // switched off) — closing must disconnect, or the panel would reopen
+      // next visit.
+      if (syncEnabled || getSetting(SETTINGS_KEYS.DRIVE_FILE_ID)) {
+        const disconnected = await handleDisconnect();
+        if (disconnected) setSyncSectionOpen(false);
+        return;
+      }
+      setSyncSectionOpen(false);
       return;
     }
-    setSyncSectionOpen(v => !v);
+    // Persist straight away: this switch is what the user sees as "on", so it
+    // must survive leaving Settings even if they never reach a successful sync.
+    // Auto-sync is silent and fails quietly, so an unproven setup does no harm.
+    setSetting(SETTINGS_KEYS.SYNC_ENABLED, 'true');
+    setSyncEnabled(true);
+    setSyncSectionOpen(true);
   };
 
   const handleSave = () => {
