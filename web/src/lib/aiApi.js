@@ -54,7 +54,8 @@ async function postMessages(apiKey, body, withFallback) {
   return data;
 }
 
-// Sends one prompt and returns every content block of the reply (across any
+// Sends one prompt (a string, or content blocks such as a PDF followed by the
+// instructions) and returns every content block of the reply (across any
 // pause/resume rounds) plus the reply's final text.
 async function callClaude({ prompt, tools, effort = 'medium' }) {
   const apiKey = requireApiKey();
@@ -199,28 +200,27 @@ function surnameOf(name) {
   return parts.join(' ').toLowerCase();
 }
 
-// Reads a web page (or PDF) with Claude and drafts its citation details and
-// summaries. Every detail is a draft for the user to check: the ones that can
-// be checked mechanically against the fetched text are, and anything that
-// fails is removed (a DOI) or flagged (authors, title) rather than trusted.
-export async function importWebSource(url) {
-  const prompt = `You are a clinical expert in anaesthesia and critical care, helping a clinician add a source that is not an indexed journal paper (for example a newsletter article, guideline, report or web page) to their library.
+// The instructions shared by every kind of import. `source` says where the
+// document is and `noun` how to refer to it ("the fetched page", "the
+// attached file").
+function importPrompt(source, noun, unreadable) {
+  return `You are a clinical expert in anaesthesia and critical care, helping a clinician add a source that is not an indexed journal paper (for example a newsletter article, guideline, report or web page) to their library. It may also be a journal paper they have as a file.
 
-Use the web_fetch tool to read this page exactly once: ${url}
+${source}
 
 Rules:
-- Base everything ONLY on the text of the fetched page. Do not use prior knowledge about the article, its authors or its publisher.
-- If the page cannot be fetched, or it does not contain an article or document (for example a login wall, a search page or a list of links), reply with {"fetched": false, "reason": "..."} and nothing else.
-- For each citation detail, copy it from the page. If the page does not state it, use an empty string (or an empty array). Never guess or construct a DOI, volume, issue, page range or date.
+- Base everything ONLY on the text of ${noun}. Do not use prior knowledge about the article, its authors or its publisher.
+- If ${unreadable}, reply with {"readable": false, "reason": "..."} and nothing else.
+- For each citation detail, copy it from ${noun}. If it is not stated, use an empty string (or an empty array). Never guess or construct a DOI, volume, issue, page range or date.
 
 Return these details:
-1. title: the document's title as shown on the page.
+1. title: the document's title as shown.
 2. authors: each author in Vancouver style, surname then initials with no full stops (e.g. "Lin DM"). Leave out degrees and post-nominals.
-3. authorsAsWritten: the author line exactly as the page shows it.
+3. authorsAsWritten: the author line exactly as shown.
 4. source: the name of the newsletter, journal, website or organisation it appears in (e.g. "APSF Newsletter").
-5. published: the publication date in the form YYYY-MM-DD, YYYY-MM or YYYY, as precise as the page states and no more.
-6. volume, issue, pages: only if the page states them.
-7. doi: only if a DOI is printed on the page.
+5. published: the publication date in the form YYYY-MM-DD, YYYY-MM or YYYY, as precise as stated and no more.
+6. volume, issue, pages: only if stated.
+7. doi: only if a DOI is printed.
 8. documentType: exactly one of ${WEB_SOURCE_TYPES.map(t => `"${t}"`).join(', ')}.
 9. fullSummary: a 5-6 sentence summary for a practising clinician. Say what kind of piece it is (e.g. opinion piece, narrative review, guideline, report of an original study), then its main arguments, findings or recommendations, the practical implications, and any important caveats. Only mention methods or results if the text describes them; if it is opinion, say so.
 10. oneLineSummary: one sentence (max 25 words) with the most important clinical takeaway.
@@ -229,7 +229,7 @@ Return these details:
 
 Respond in this exact JSON format with no other text:
 {
-  "fetched": true,
+  "readable": true,
   "title": "...",
   "authors": ["..."],
   "authorsAsWritten": "...",
@@ -245,6 +245,70 @@ Respond in this exact JSON format with no other text:
   "subject": "...",
   "tags": ["..."]
 }`;
+}
+
+// Turns the AI's reply into a draft, checking what can be checked
+// mechanically against the source's own text: a DOI that isn't in it is
+// removed, and authors or a title that aren't are flagged. `noCheckReason`
+// explains why there was no text to check against.
+function finaliseImport(text, { pageText, fallbackTitle, noCheckReason, what }) {
+  const parsed = parseJsonReply(text || '{}');
+  if (parsed.readable === false) {
+    throw new Error(`Nothing to import from that ${what}${parsed.reason ? `: ${parsed.reason}` : '.'}`);
+  }
+
+  const str = v => (typeof v === 'string' ? v.trim() : '');
+  const details = {
+    title: str(parsed.title) || str(fallbackTitle),
+    authors: Array.isArray(parsed.authors) ? parsed.authors.map(str).filter(Boolean) : [],
+    authorsAsWritten: str(parsed.authorsAsWritten),
+    source: str(parsed.source),
+    published: str(parsed.published),
+    volume: str(parsed.volume),
+    issue: str(parsed.issue),
+    pages: str(parsed.pages),
+    doi: str(parsed.doi).replace(/^https?:\/\/(dx\.)?doi\.org\//i, '').replace(/^doi:\s*/i, ''),
+    documentType: WEB_SOURCE_TYPES.includes(parsed.documentType) ? parsed.documentType : 'Web Article',
+  };
+
+  const warnings = [];
+  const checkText = pageText ? normaliseText(pageText) : null;
+  if (checkText) {
+    if (details.doi && !checkText.includes(details.doi.toLowerCase())) {
+      warnings.push(`The AI suggested a DOI (${details.doi}) that isn't in the ${what}, so it has been removed.`);
+      details.doi = '';
+    }
+    const unmatched = details.authors.filter(a => !checkText.includes(surnameOf(a)));
+    if (unmatched.length > 0) {
+      warnings.push(`Couldn't find ${unmatched.join(', ')} in the ${what} — check the author list.`);
+    }
+    if (details.title && !checkText.includes(normaliseText(details.title))) {
+      warnings.push(`The title doesn't appear word-for-word in the ${what} — check it.`);
+    }
+  } else {
+    warnings.push(noCheckReason);
+  }
+
+  return {
+    details,
+    summary: {
+      subject: str(parsed.subject),
+      oneLineSummary: str(parsed.oneLineSummary),
+      fullSummary: str(parsed.fullSummary),
+      tags: Array.isArray(parsed.tags) ? parsed.tags.filter(t => TAGS.includes(t)) : [],
+    },
+    warnings,
+  };
+}
+
+// Reads a web page (or PDF link) with Claude and drafts its citation details
+// and summaries, for the user to check before saving.
+export async function importWebSource(url) {
+  const prompt = importPrompt(
+    `Use the web_fetch tool to read this page exactly once: ${url}`,
+    'the fetched page',
+    'the page cannot be fetched, or it does not contain an article or document (for example a login wall, a search page or a list of links)',
+  );
 
   const { text, blocks } = await callClaude({
     prompt,
@@ -260,54 +324,42 @@ Respond in this exact JSON format with no other text:
     throw new Error(error ? fetchErrorMessage(error.error_code) : 'The page could not be read.');
   }
 
-  const parsed = parseJsonReply(text || '{}');
-  if (parsed.fetched === false) {
-    throw new Error(`Nothing to import from that page${parsed.reason ? `: ${parsed.reason}` : '.'}`);
-  }
-
   const document = fetched[fetched.length - 1].content;
   // A PDF comes back as binary, which can't be cross-checked here.
-  const pageText = document?.source?.type === 'text' ? normaliseText(document.source.data) : null;
-  const str = v => (typeof v === 'string' ? v.trim() : '');
+  return finaliseImport(text, {
+    pageText: document?.source?.type === 'text' ? document.source.data : null,
+    fallbackTitle: document?.title,
+    noCheckReason: "This source was a PDF, so the details couldn't be cross-checked automatically — check them against it.",
+    what: 'page',
+  });
+}
 
-  const warnings = [];
-  const details = {
-    title: str(parsed.title) || str(document?.title),
-    authors: Array.isArray(parsed.authors) ? parsed.authors.map(str).filter(Boolean) : [],
-    authorsAsWritten: str(parsed.authorsAsWritten),
-    source: str(parsed.source),
-    published: str(parsed.published),
-    volume: str(parsed.volume),
-    issue: str(parsed.issue),
-    pages: str(parsed.pages),
-    doi: str(parsed.doi).replace(/^https?:\/\/(dx\.)?doi\.org\//i, '').replace(/^doi:\s*/i, ''),
-    documentType: WEB_SOURCE_TYPES.includes(parsed.documentType) ? parsed.documentType : 'Web Article',
-  };
+// Reads a file the user picked (see fileSource.js: one PDF, or images of a
+// document's pages) and drafts its details and summaries the same way.
+export async function importFileSource(file) {
+  const blocks = file.parts.map(part =>
+    part.type === 'document'
+      ? { type: 'document', source: { type: 'base64', media_type: part.mediaType, data: part.base64 } }
+      : { type: 'image', source: { type: 'base64', media_type: part.mediaType, data: part.base64 } },
+  );
+  const described = file.kind === 'pdf'
+    ? 'The attached PDF is the document to import.'
+    : `The attached ${file.parts.length === 1 ? 'image is a photo or screenshot' : `${file.parts.length} images are photos or screenshots, in order,`} of the document to import.`;
+  const prompt = importPrompt(
+    described,
+    'the attached file',
+    'the file cannot be read, or it does not contain an article or document',
+  );
 
-  if (pageText) {
-    if (details.doi && !pageText.includes(details.doi.toLowerCase())) {
-      warnings.push(`The AI suggested a DOI (${details.doi}) that isn't on the page, so it has been removed.`);
-      details.doi = '';
-    }
-    const unmatched = details.authors.filter(a => !pageText.includes(surnameOf(a)));
-    if (unmatched.length > 0) {
-      warnings.push(`Couldn't find ${unmatched.join(', ')} on the page — check the author list.`);
-    }
-    if (details.title && !pageText.includes(normaliseText(details.title))) {
-      warnings.push("The title doesn't appear word-for-word on the page — check it.");
-    }
-  } else {
-    warnings.push("This source was a PDF, so the details couldn't be cross-checked automatically — check them against it.");
-  }
+  // The file goes before the instructions, which Claude handles best.
+  const { text } = await callClaude({ prompt: [...blocks, { type: 'text', text: prompt }] });
 
-  return {
-    details,
-    summary: {
-      subject: str(parsed.subject),
-      oneLineSummary: str(parsed.oneLineSummary),
-      fullSummary: str(parsed.fullSummary),
-      tags: Array.isArray(parsed.tags) ? parsed.tags.filter(t => TAGS.includes(t)) : [],
-    },
-    warnings,
-  };
+  return finaliseImport(text, {
+    pageText: file.pageText,
+    fallbackTitle: '',
+    noCheckReason: file.kind === 'pdf'
+      ? "This PDF has no text layer (it looks scanned), so the details couldn't be cross-checked automatically — check them against it."
+      : "Details read from images can't be cross-checked automatically — check them against the document.",
+    what: file.kind === 'pdf' ? 'PDF' : 'document',
+  });
 }

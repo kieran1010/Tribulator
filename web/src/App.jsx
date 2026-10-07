@@ -7,6 +7,7 @@ import BottomNav from './components/BottomNav';
 import UpdatePrompt from './components/UpdatePrompt';
 import SearchScreen from './screens/SearchScreen';
 import ResultsScreen from './screens/ResultsScreen';
+import ImportFileScreen from './screens/ImportFileScreen';
 import DetailScreen from './screens/DetailScreen';
 import SavedScreen from './screens/SavedScreen';
 import SettingsScreen from './screens/SettingsScreen';
@@ -90,6 +91,7 @@ export default function App() {
           {/* Smart search folded into /search; kept so old links still land somewhere. */}
           <Route path="/smart-search" element={<Navigate to="/search" replace />} />
           <Route path="/results" element={<ResultsScreen />} />
+          <Route path="/import-file" element={<ImportFileScreen />} />
           <Route path="/detail" element={<DetailScreen />} />
           <Route path="/saved" element={<SavedScreen />} />
           <Route path="/settings" element={<SettingsScreen />} />

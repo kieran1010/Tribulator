@@ -83,9 +83,9 @@ export function formatCitationDate(date) {
   return [year, monthName, monthName && day ? String(Number(day)) : ''].filter(Boolean).join(' ');
 }
 
-// A Vancouver (Citing Medicine) reference for something read on the web — a
-// newsletter article, guideline or web page — with the "[Internet]", "[cited]"
-// and "Available from" parts that format requires. As with journal articles,
+// A Vancouver (Citing Medicine) reference for a source that isn't an indexed
+// paper. Read on the web (a newsletter article, guideline or web page), it has
+// the "[Internet]", "[cited]" and "Available from" parts that format requires. As with journal articles,
 // every part is optional and only appears when it exists.
 export function buildWebReference(source, citedOn = new Date()) {
   const authors = formatAuthors(source.authors);
@@ -97,11 +97,14 @@ export function buildWebReference(source, citedOn = new Date()) {
   const issue = source.issue ? `(${source.issue})` : '';
   const pages = abbreviatePages(source.pages);
 
-  let locator = container ? `${container} [Internet]` : '';
-  const dated = [published, `[cited ${cited}]`].filter(Boolean).join(' ');
-  locator += `${locator ? '. ' : ''}${dated}`;
-  if (volume || issue) locator += `;${volume}${issue}`;
-  if (pages) locator += `${volume || issue ? ':' : ';'}${pages}`;
+  // Without an address it's a document in hand (a PDF or a printout), cited
+  // in print form: no "[Internet]" or "[cited]".
+  const online = !!source.url;
+  let locator = container ? `${container}${online ? ' [Internet]' : ''}` : '';
+  const dated = [published, online ? `[cited ${cited}]` : ''].filter(Boolean).join(' ');
+  if (dated) locator += `${locator ? '. ' : ''}${dated}`;
+  if (volume || issue) locator += `${dated ? ';' : locator ? '. ' : ''}${volume}${issue}`;
+  if (pages) locator += `${volume || issue ? ':' : dated ? ';' : locator ? '. ' : ''}${pages}`;
 
   const parts = [authors, title, locator].map(p => p.trim()).filter(Boolean);
   let reference = parts.length ? `${parts.join('. ')}.` : '';
