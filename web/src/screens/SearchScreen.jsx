@@ -31,6 +31,7 @@ export default function SearchScreen() {
 
   const classification = useMemo(() => classifyQuery(query), [query]);
   const isLookup = classification.mode === 'lookup';
+  const isWeb = classification.mode === 'web';
   const activeFilters = countActiveFilters(filters);
 
   const setFilter = (key, value) => setFilters(prev => ({ ...prev, [key]: value }));
@@ -61,7 +62,7 @@ export default function SearchScreen() {
         />
         <input
           type="text"
-          placeholder="Topic, DOI, PubMed ID, title, or full reference..."
+          placeholder="Topic, DOI, PubMed ID, title, reference or web link..."
           value={query}
           onChange={e => setQuery(e.target.value)}
           onKeyDown={e => e.key === 'Enter' && handleSearch()}
@@ -82,7 +83,7 @@ export default function SearchScreen() {
           </button>
         )}
         <p className="hint" style={{ marginTop: 8, minHeight: 16 }}>
-          {classification.hint || 'Paste anything — the search works out what it is.'}
+          {classification.hint}
         </p>
       </div>
 
@@ -105,11 +106,11 @@ export default function SearchScreen() {
 
       {showFilters && (
         <div className="section">
-          {isLookup && (
+          {(isLookup || isWeb) && (
             <div className="card">
               <p className="hint">
-                Filters narrow topic searches. This input looks like one specific paper, so they
-                won't be applied.
+                Filters narrow topic searches. This input looks like one specific {isWeb ? 'web page' : 'paper'}, so
+                they won't be applied.
               </p>
             </div>
           )}
@@ -188,7 +189,7 @@ export default function SearchScreen() {
         disabled={!query.trim()}
         style={{ marginTop: 16 }}
       >
-        {isLookup ? 'Find this paper' : 'Search trials'}
+        {isWeb ? 'Import this page' : isLookup ? 'Find this paper' : 'Search'}
       </button>
     </div>
   );

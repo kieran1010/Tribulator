@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { fetchFullDetails } from '../lib/pubmedApi';
-import { fetchAISummary } from '../lib/aiApi';
+import { fetchAISummary, importWebSource } from '../lib/aiApi';
+import { isWebSourceUrl } from '../lib/webSource';
 import { buildVancouverReference, getJournalQuartile, classifyPublicationType } from '../lib/format';
 import { isAiEnabled } from '../lib/storage';
 import { getAllPapers, addPaper, putPaper, deletePaper, findMatchingPaper } from '../lib/db';
@@ -13,10 +14,16 @@ export default function DetailScreen() {
   const { state } = useLocation();
   const navigate = useNavigate();
   const trial = state?.trial;
+  // A saved web page (newsletter article, guideline...) has no registry record
+  // to fetch; its details live only in the saved copy.
+  const isWebSource = !!trial && !trial.pubmedId && !trial.crossrefDetails && isWebSourceUrl(trial.url);
 
   const [details, setDetails] = useState(null);
   const [detailsLoading, setDetailsLoading] = useState(true);
   const [savedPaper, setSavedPaper] = useState(null);
+  // Kept after an unsave, so re-saving a web source doesn't lose the details
+  // that were checked when it was imported.
+  const [storedRecord, setStoredRecord] = useState(null);
   const [abstractExpanded, setAbstractExpanded] = useState(false);
 
   const [aiSummary, setAiSummary] = useState(null);
@@ -49,9 +56,12 @@ export default function DetailScreen() {
       const url = trial.pubmedId ? `https://pubmed.ncbi.nlm.nih.gov/${trial.pubmedId}/` : trial.url;
       const papers = await getAllPapers();
       if (cancelled) return;
-      const match = findMatchingPaper(papers, { url });
+      const match = trial.savedPaperId != null
+        ? papers.find(p => p.id === trial.savedPaperId) || null
+        : findMatchingPaper(papers, { url });
       if (match) {
         setSavedPaper(match);
+        setStoredRecord(match);
         if (match.oneLineSummary || match.fullSummary || match.subject) {
           setAiSummary({
             subject: match.subject,
@@ -74,7 +84,20 @@ export default function DetailScreen() {
       setSavedPaper(null);
       return;
     }
-    const paper = {
+    const paper = isWebSource && storedRecord ? {
+      title: storedRecord.title,
+      reference: storedRecord.reference,
+      journal: storedRecord.journal,
+      paperType: storedRecord.paperType,
+      url: storedRecord.url,
+      year: storedRecord.year,
+      subject: aiSummary?.subject || '',
+      abstract: storedRecord.abstract || '',
+      dateEntered: new Date().toISOString(),
+      oneLineSummary: aiSummary?.oneLineSummary || '',
+      fullSummary: aiSummary?.fullSummary || '',
+      tags: aiSummary?.tags || [],
+    } : {
       title: trial.title,
       reference: buildVancouverReference(trial, details || {}),
       journal: trial.journal || details?.journal || '',
@@ -96,7 +119,11 @@ export default function DetailScreen() {
     setAiLoading(true);
     setAiError(null);
     try {
-      const summary = await fetchAISummary(trial, details?.abstract);
+      // A web source is re-read rather than summarised from an abstract it
+      // doesn't have.
+      const summary = isWebSource
+        ? (await importWebSource(trial.url)).summary
+        : await fetchAISummary(trial, details?.abstract);
       setAiSummary(summary);
       if (savedPaper) {
         const updated = { ...savedPaper, ...summary };
@@ -110,7 +137,9 @@ export default function DetailScreen() {
     }
   };
 
-  const reference = details ? buildVancouverReference(trial, details) : null;
+  const reference = isWebSource && storedRecord?.reference
+    ? storedRecord.reference
+    : details ? buildVancouverReference(trial, details) : null;
   const studyLink = trial.pubmedId ? `https://pubmed.ncbi.nlm.nih.gov/${trial.pubmedId}/` : trial.url;
   const journal = trial.journal || details?.journal;
   const pubdate = trial.pubdate || details?.pubdate;
@@ -163,9 +192,11 @@ export default function DetailScreen() {
       )}
       <a href={studyLink} target="_blank" rel="noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 0' }}>
         <ExternalLinkIcon width={16} height={16} />
-        View on PubMed
+        {trial.pubmedId ? 'View on PubMed' : 'View source'}
       </a>
 
+      {!(isWebSource && !details?.abstract) && (
+        <>
       <div className="divider" />
 
       <p className="section-title">📄 Abstract</p>
@@ -193,6 +224,8 @@ export default function DetailScreen() {
           )}
         </div>
       )}
+        </>
+      )}
 
       <div className="divider" />
 
@@ -211,7 +244,7 @@ export default function DetailScreen() {
       {aiLoading && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 0' }}>
           <div className="spinner" />
-          <span className="hint">Generating clinical summary...</span>
+          <span className="hint">{isWebSource ? 'Re-reading the page...' : 'Generating clinical summary...'}</span>
         </div>
       )}
 

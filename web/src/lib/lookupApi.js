@@ -18,7 +18,7 @@ import { getJournalQuartile } from './format';
 // shape ResultsScreen/DetailScreen already know how to render and save.
 // `notInPubmed` and `crossrefDetails` are the two fields DetailScreen checks
 // for that aren't present on ordinary PubMed trials.
-function crossrefToTrial(cr) {
+export function crossrefToTrial(cr) {
   const pubdate = cr.year ? String(cr.year) : '';
   return {
     id: `crossref-${cr.doi || cr.title}`,
