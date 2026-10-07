@@ -1,4 +1,5 @@
 import { parseDoi, parsePmid, extractDoi, extractPmidFromUrl, extractPmcid } from './pubmedApi';
+import { isWebUrl } from './webSource';
 
 // A paper title is nearly always longer than a keyword query. Below this the
 // input is treated as a topic search unless it carries a citation marker. The
@@ -42,13 +43,15 @@ const HINTS = {
   pmcid: 'Detected a PubMed Central link — will open that paper.',
   citation: 'Looks like a reference — will search for that paper.',
   title: 'Looks like a paper title — will search for that paper.',
+  web: 'Detected a web page — AI will read it and draft the details for you to check.',
   query: 'PubMed search syntax — will run a topic search.',
   keywords: 'Topic search — filters apply.',
 };
 
 // Decides, from the input alone, whether the user is after one specific paper
-// ('lookup') or a topic ('keywords'). Pure and cheap, so the search box can
-// call it on every keystroke to show what it will do.
+// ('lookup'), a web page to import ('web') or a topic ('keywords'). Pure and
+// cheap, so the search box can call it on every keystroke to show what it
+// will do.
 export function classifyQuery(rawInput) {
   const input = (rawInput || '').trim();
   if (!input) return { mode: null, kind: 'empty', confidence: 'high', value: null, hint: '' };
@@ -67,6 +70,12 @@ export function classifyQuery(rawInput) {
   const embeddedDoi = extractDoi(input);
   if (embeddedDoi) {
     return { mode: 'lookup', kind: 'doi', confidence: 'high', value: embeddedDoi, hint: HINTS.doi };
+  }
+
+  // Any other link (a newsletter article, a guideline, a journal page with no
+  // DOI in its address) can only be read, not looked up in a registry.
+  if (isWebUrl(input)) {
+    return { mode: 'web', kind: 'web', confidence: 'high', value: input, hint: HINTS.web };
   }
 
   if (QUERY_SYNTAX.test(input)) {

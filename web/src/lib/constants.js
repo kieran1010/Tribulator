@@ -58,8 +58,24 @@ export const PUBLICATION_TYPE_RULES = [
   { label: 'Observational Study', match: ['Observational Study', 'Comparative Study', 'Multicenter Study'] },
 ];
 
+// The types a source imported from a web page can be given. Where one means
+// the same as a PubMed-derived category it reuses that label, so the Saved
+// screen's type filter groups them together.
+export const WEB_SOURCE_TYPES = [
+  'Newsletter Article',
+  'Guideline',
+  'Commentary / Editorial',
+  'Review',
+  'Report',
+  'Web Article',
+];
+
 // Display order for the Saved screen's type filter chips.
-export const PUBLICATION_TYPES = [...PUBLICATION_TYPE_RULES.map(r => r.label), 'Original Research'];
+export const PUBLICATION_TYPES = [
+  ...PUBLICATION_TYPE_RULES.map(r => r.label),
+  'Original Research',
+  ...WEB_SOURCE_TYPES.filter(t => !PUBLICATION_TYPE_RULES.some(r => r.label === t)),
+];
 
 export const DATE_FILTERS = ['Last Month', 'Last Year', 'Last 5 Years', 'All Time'];
 export const QUARTILE_FILTERS = ['Any', 'Q4', 'Q3', 'Q2', 'Q1'];

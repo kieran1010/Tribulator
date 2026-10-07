@@ -71,6 +71,45 @@ export function buildVancouverReference(trial, details) {
   return parts.length ? `${parts.join('. ')}.` : '';
 }
 
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+// "2026-09-04" -> "2026 Sep 4", "2026-09" -> "2026 Sep", "2026" -> "2026".
+// Anything else is returned as given rather than guessed at.
+export function formatCitationDate(date) {
+  const match = /^(\d{4})(?:-(\d{1,2})(?:-(\d{1,2}))?)?$/.exec((date || '').trim());
+  if (!match) return (date || '').trim();
+  const [, year, month, day] = match;
+  const monthName = month ? MONTHS[Number(month) - 1] : '';
+  return [year, monthName, monthName && day ? String(Number(day)) : ''].filter(Boolean).join(' ');
+}
+
+// A Vancouver (Citing Medicine) reference for something read on the web — a
+// newsletter article, guideline or web page — with the "[Internet]", "[cited]"
+// and "Available from" parts that format requires. As with journal articles,
+// every part is optional and only appears when it exists.
+export function buildWebReference(source, citedOn = new Date()) {
+  const authors = formatAuthors(source.authors);
+  const title = stripTrailingPunctuation(source.title);
+  const container = stripTrailingPunctuation(source.source);
+  const published = formatCitationDate(source.published || source.year);
+  const cited = formatCitationDate(citedOn.toISOString().slice(0, 10));
+  const volume = source.volume || '';
+  const issue = source.issue ? `(${source.issue})` : '';
+  const pages = abbreviatePages(source.pages);
+
+  let locator = container ? `${container} [Internet]` : '';
+  const dated = [published, `[cited ${cited}]`].filter(Boolean).join(' ');
+  locator += `${locator ? '. ' : ''}${dated}`;
+  if (volume || issue) locator += `;${volume}${issue}`;
+  if (pages) locator += `${volume || issue ? ':' : ';'}${pages}`;
+
+  const parts = [authors, title, locator].map(p => p.trim()).filter(Boolean);
+  let reference = parts.length ? `${parts.join('. ')}.` : '';
+  if (source.url) reference += ` Available from: ${source.url}`;
+  if (source.doi) reference += ` doi:${source.doi}`;
+  return reference.trim();
+}
+
 // Collapses PubMed's publication-type list (e.g. ["Journal Article",
 // "Randomized Controlled Trial"]) into one category for the Saved screen's
 // type filter, via PUBLICATION_TYPE_RULES. Empty/unknown input returns ''

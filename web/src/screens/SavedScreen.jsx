@@ -167,6 +167,7 @@ export default function SavedScreen() {
   const renderCard = (item, reason) => {
     const trial = {
       id: item.id,
+      savedPaperId: item.id,
       pubmedId: pubmedIdFromUrl(item.url),
       title: item.title,
       journal: item.journal || '',
