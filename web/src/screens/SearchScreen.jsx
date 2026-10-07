@@ -83,7 +83,7 @@ export default function SearchScreen() {
           </button>
         )}
         <p className="hint" style={{ marginTop: 8, minHeight: 16 }}>
-          {classification.hint || 'Paste anything — the search works out what it is.'}
+          {classification.hint}
         </p>
       </div>
 
@@ -189,7 +189,7 @@ export default function SearchScreen() {
         disabled={!query.trim()}
         style={{ marginTop: 16 }}
       >
-        {isWeb ? 'Import this page' : isLookup ? 'Find this paper' : 'Search trials'}
+        {isWeb ? 'Import this page' : isLookup ? 'Find this paper' : 'Search'}
       </button>
     </div>
   );
