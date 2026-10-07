@@ -4,6 +4,8 @@ import { DATE_FILTERS, DEFAULT_FILTERS, QUARTILE_FILTERS, STUDY_TYPES } from '..
 import { classifyQuery } from '../lib/queryClassifier';
 import { loadSearchDraft, saveSearchDraft } from '../lib/searchDraft';
 import { SearchIcon, ChevronDown, XIcon } from '../components/Icon';
+import FilePickButton from '../components/FilePickButton';
+import { setPendingImport } from '../lib/fileSource';
 
 // How many filters differ from the defaults — shown as a badge so a collapsed
 // panel never hides a filter that's silently narrowing the results.
@@ -191,6 +193,15 @@ export default function SearchScreen() {
       >
         {isWeb ? 'Import this page' : isLookup ? 'Find this paper' : 'Search'}
       </button>
+
+      <FilePickButton
+        label="Import from file (PDF or image)"
+        style={{ marginTop: 10 }}
+        onFiles={files => {
+          setPendingImport(files);
+          navigate('/import-file');
+        }}
+      />
     </div>
   );
 }

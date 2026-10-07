@@ -2,11 +2,13 @@ import { useEffect, useRef } from 'react';
 import { HashRouter, Routes, Route, Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { startAutoSync } from './lib/sync';
 import { DEFAULT_FILTERS } from './lib/constants';
+import { classifyQuery } from './lib/queryClassifier';
 import Header from './components/Header';
 import BottomNav from './components/BottomNav';
 import UpdatePrompt from './components/UpdatePrompt';
 import SearchScreen from './screens/SearchScreen';
 import ResultsScreen from './screens/ResultsScreen';
+import ImportFileScreen from './screens/ImportFileScreen';
 import DetailScreen from './screens/DetailScreen';
 import SavedScreen from './screens/SavedScreen';
 import SettingsScreen from './screens/SettingsScreen';
@@ -37,7 +39,10 @@ function Layout() {
     // Strip the share params so refreshing or navigating back doesn't replay
     // the same lookup.
     window.history.replaceState(null, '', window.location.pathname + window.location.hash);
-    navigate('/results', { state: { query, filters: DEFAULT_FILTERS, mode: 'lookup' } });
+    // Something shared is one specific item, never a topic: a web page
+    // (newsletter, guideline) is imported, anything else looked up as a paper.
+    const mode = classifyQuery(query).mode === 'web' ? 'web' : 'lookup';
+    navigate('/results', { state: { query, filters: DEFAULT_FILTERS, mode } });
     // Runs once, on the initial load that a share can land on.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -90,6 +95,7 @@ export default function App() {
           {/* Smart search folded into /search; kept so old links still land somewhere. */}
           <Route path="/smart-search" element={<Navigate to="/search" replace />} />
           <Route path="/results" element={<ResultsScreen />} />
+          <Route path="/import-file" element={<ImportFileScreen />} />
           <Route path="/detail" element={<DetailScreen />} />
           <Route path="/saved" element={<SavedScreen />} />
           <Route path="/settings" element={<SettingsScreen />} />

@@ -5,7 +5,7 @@ import { resolveLookup } from '../lib/lookupApi';
 import { classifyQuery } from '../lib/queryClassifier';
 import { DEFAULT_FILTERS } from '../lib/constants';
 import ResultCard from '../components/ResultCard';
-import WebImportView from '../components/WebImportView';
+import SourceImportView from '../components/SourceImportView';
 import { ChevronDown } from '../components/Icon';
 
 // Above this many results the search clearly worked, so the spell check is
@@ -47,7 +47,7 @@ export default function ResultsScreen() {
       navigate('/search', { replace: true });
       return;
     }
-    // A web page is read by WebImportView, which manages its own loading.
+    // A web page is read by SourceImportView, which manages its own loading.
     if (mode === 'web') return;
     let cancelled = false;
     setLoading(true);
@@ -133,7 +133,7 @@ export default function ResultsScreen() {
             Search as a topic instead
           </button>
         </div>
-        <WebImportView url={query} />
+        <SourceImportView url={query} />
       </div>
     );
   }

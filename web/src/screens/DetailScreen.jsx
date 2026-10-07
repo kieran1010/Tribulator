@@ -17,6 +17,10 @@ export default function DetailScreen() {
   // A saved web page (newsletter article, guideline...) has no registry record
   // to fetch; its details live only in the saved copy.
   const isWebSource = !!trial && !trial.pubmedId && !trial.crossrefDetails && isWebSourceUrl(trial.url);
+  // Without a PubMed or CrossRef record to fetch, the saved copy (a web page,
+  // an imported file, a legacy spreadsheet row) is the only source of the
+  // reference.
+  const hasRegistryRecord = !!trial && (!!trial.pubmedId || !!trial.crossrefDetails);
 
   const [details, setDetails] = useState(null);
   const [detailsLoading, setDetailsLoading] = useState(true);
@@ -84,7 +88,7 @@ export default function DetailScreen() {
       setSavedPaper(null);
       return;
     }
-    const paper = isWebSource && storedRecord ? {
+    const paper = !hasRegistryRecord && storedRecord ? {
       title: storedRecord.title,
       reference: storedRecord.reference,
       journal: storedRecord.journal,
@@ -137,9 +141,12 @@ export default function DetailScreen() {
     }
   };
 
-  const reference = isWebSource && storedRecord?.reference
+  const reference = !hasRegistryRecord && storedRecord?.reference
     ? storedRecord.reference
     : details ? buildVancouverReference(trial, details) : null;
+  // A summary drafted from a file (or a record with nothing but a title) can't
+  // be redone here; the title alone would make a worse one.
+  const canRegenerate = hasRegistryRecord || isWebSource || !!details?.abstract;
   const studyLink = trial.pubmedId ? `https://pubmed.ncbi.nlm.nih.gov/${trial.pubmedId}/` : trial.url;
   const journal = trial.journal || details?.journal;
   const pubdate = trial.pubdate || details?.pubdate;
@@ -190,12 +197,14 @@ export default function DetailScreen() {
           {details?.doi && <p className="hint" style={{ marginTop: 6 }}>{details.doi}</p>}
         </div>
       )}
+      {studyLink && (
       <a href={studyLink} target="_blank" rel="noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 0' }}>
         <ExternalLinkIcon width={16} height={16} />
         {trial.pubmedId ? 'View on PubMed' : 'View source'}
       </a>
+      )}
 
-      {!(isWebSource && !details?.abstract) && (
+      {!(!hasRegistryRecord && !details?.abstract) && (
         <>
       <div className="divider" />
 
@@ -279,7 +288,11 @@ export default function DetailScreen() {
 
           {isAiEnabled() && (
             <div style={{ textAlign: 'right' }}>
-              <button type="button" className="btn btn-ghost" onClick={handleSummarise}>↺ Regenerate</button>
+              {canRegenerate ? (
+                <button type="button" className="btn btn-ghost" onClick={handleSummarise}>↺ Regenerate</button>
+              ) : (
+                <p className="hint">There's no abstract or web page to regenerate from — import the source again instead.</p>
+              )}
             </div>
           )}
         </div>

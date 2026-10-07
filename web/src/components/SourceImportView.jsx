@@ -1,14 +1,15 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { importWebSource } from '../lib/aiApi';
+import { importFileSource, importWebSource } from '../lib/aiApi';
 import { searchPubmedIdByDoi, pmidsToTrials } from '../lib/pubmedApi';
 import { fetchCrossrefByDoi } from '../lib/crossrefApi';
 import { crossrefToTrial } from '../lib/lookupApi';
 import { buildWebReference } from '../lib/format';
 import { canonicaliseUrl } from '../lib/webSource';
+import { readFilesForImport } from '../lib/fileSource';
 import { isAiEnabled } from '../lib/storage';
 import { TAGS, WEB_SOURCE_TYPES } from '../lib/constants';
-import { addPaper, getAllPapers } from '../lib/db';
+import { addPaper, getAllPapers, pubmedIdFromUrl } from '../lib/db';
 import ResultCard from './ResultCard';
 import { ExternalLinkIcon, SparklesIcon } from './Icon';
 
@@ -34,11 +35,16 @@ async function findRegisteredRecord(doi) {
   return cr ? crossrefToTrial(cr) : null;
 }
 
-// Reads a web page with AI, then shows every detail it drafted as an editable
-// form. Nothing is saved until the user has had the chance to check it.
-export default function WebImportView({ url: rawUrl }) {
+const normaliseTitle = t => (t || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+
+// Reads a web page (`url`) or files from the device (`files`: one PDF, or
+// images of a document) with AI, then shows every detail it drafted as an
+// editable form. Nothing is saved until the user has had the chance to check it.
+export default function SourceImportView({ url: rawUrl, files }) {
   const navigate = useNavigate();
-  const url = canonicaliseUrl(rawUrl);
+  const isFile = !!files;
+  const url = isFile ? '' : canonicaliseUrl(rawUrl);
+  const what = isFile ? 'file' : 'page';
   const aiEnabled = isAiEnabled();
 
   const [loading, setLoading] = useState(aiEnabled);
@@ -47,6 +53,9 @@ export default function WebImportView({ url: rawUrl }) {
   const [warnings, setWarnings] = useState([]);
   const [registered, setRegistered] = useState(null);
   const [existing, setExisting] = useState(null);
+  // A saved paper that looks like the same document — only a warning, as two
+  // different documents can share a title.
+  const [similar, setSimilar] = useState(null);
   const [saved, setSaved] = useState(false);
   const [attempt, setAttempt] = useState(0);
 
@@ -58,15 +67,20 @@ export default function WebImportView({ url: rawUrl }) {
     (async () => {
       try {
         const papers = await getAllPapers();
-        const match = papers.find(p => p.url && canonicaliseUrl(p.url) === url);
+        const match = !isFile && papers.find(p => p.url && canonicaliseUrl(p.url) === url);
         if (cancelled) return;
         if (match) {
           setExisting(match);
           return;
         }
 
-        const result = await importWebSource(url);
+        const result = isFile
+          ? await importFileSource(await readFilesForImport(files))
+          : await importWebSource(url);
         if (cancelled) return;
+        const doiUrl = result.details.doi ? `https://doi.org/${result.details.doi}` : null;
+        const title = normaliseTitle(result.details.title);
+        setSimilar(papers.find(p => (doiUrl && p.url === doiUrl) || (title && normaliseTitle(p.title) === title)) || null);
         setForm({
           ...result.details,
           authors: result.details.authors.join(', '),
@@ -86,12 +100,12 @@ export default function WebImportView({ url: rawUrl }) {
       }
     })();
     return () => { cancelled = true; };
-  }, [url, aiEnabled, attempt]);
+  }, [url, files, isFile, aiEnabled, attempt]);
 
   if (!aiEnabled) {
     return (
       <div className="empty-state">
-        <p>Importing a web page uses AI to read it.</p>
+        <p>Importing a {isFile ? 'file' : 'web page'} uses AI to read it.</p>
         <p className="hint">
           Turn on AI features and add your Anthropic API key in <Link to="/settings">Settings</Link>.
         </p>
@@ -103,7 +117,7 @@ export default function WebImportView({ url: rawUrl }) {
     return (
       <div className="empty-state">
         <div className="spinner" style={{ margin: '0 auto 12px' }} />
-        <p>Reading the page...</p>
+        <p>Reading the {what}...</p>
         <p className="hint">This can take up to a minute.</p>
       </div>
     );
@@ -112,7 +126,7 @@ export default function WebImportView({ url: rawUrl }) {
   if (existing) {
     return (
       <div className="empty-state">
-        <p>{saved ? 'Saved to your library.' : 'This page is already in your library.'}</p>
+        <p>{saved ? 'Saved to your library.' : `This ${what} is already in your library.`}</p>
         <ResultCard
           item={{ title: existing.title, journal: existing.journal, pubdate: existing.year }}
           onClick={() => navigate('/detail', { state: { trial: savedTrial(existing) } })}
@@ -139,7 +153,11 @@ export default function WebImportView({ url: rawUrl }) {
     set('tags', form.tags.includes(tag) ? form.tags.filter(t => t !== tag) : [...form.tags, tag]);
 
   const authors = form.authors.split(',').map(a => a.trim()).filter(Boolean);
+  // A file has no address of its own, so it's cited in print form and linked
+  // by its DOI when it has one.
   const reference = buildWebReference({ ...form, authors, url });
+  const doi = form.doi.trim();
+  const savedUrl = isFile ? (doi ? `https://doi.org/${doi}` : '') : url;
 
   const handleSave = async () => {
     const year = (/^\d{4}/.exec(form.published) || [''])[0];
@@ -148,7 +166,7 @@ export default function WebImportView({ url: rawUrl }) {
       reference,
       journal: form.source.trim(),
       paperType: form.documentType,
-      url,
+      url: savedUrl,
       year,
       subject: form.subject.trim(),
       abstract: '',
@@ -165,20 +183,34 @@ export default function WebImportView({ url: rawUrl }) {
   return (
     <div>
       <div style={{ background: 'var(--warning-soft)', borderLeft: '3px solid var(--warning)', padding: 12, borderRadius: 8, marginBottom: 12 }}>
-        <p style={{ margin: 0, fontWeight: 600 }}>Drafted by AI from the page — check before saving</p>
-        <a href={url} target="_blank" rel="noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginTop: 6 }}>
-          <ExternalLinkIcon width={14} height={14} />
-          Open the page to compare
-        </a>
+        <p style={{ margin: 0, fontWeight: 600 }}>Drafted by AI from the {what} — check before saving</p>
+        {isFile ? (
+          <p className="hint" style={{ marginTop: 6 }}>Compare with {files.map(f => f.name).join(', ')}</p>
+        ) : (
+          <a href={url} target="_blank" rel="noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginTop: 6 }}>
+            <ExternalLinkIcon width={14} height={14} />
+            Open the page to compare
+          </a>
+        )}
         {warnings.map((w, i) => (
           <p key={i} className="hint" style={{ marginTop: 6, color: 'var(--warning)', fontWeight: 600 }}>⚠ {w}</p>
         ))}
       </div>
 
+      {similar && (
+        <div className="card section">
+          <p className="section-title" style={{ marginBottom: 4 }}>Something similar is already in your library</p>
+          <ResultCard
+            item={{ title: similar.title, journal: similar.journal, pubdate: similar.year }}
+            onClick={() => navigate('/detail', { state: { trial: savedTrial(similar) } })}
+          />
+        </div>
+      )}
+
       {registered && (
         <div className="card section">
-          <p className="section-title" style={{ marginBottom: 4 }}>This page's DOI belongs to an indexed paper</p>
-          <p className="hint" style={{ marginBottom: 8 }}>Its registry record is more reliable — open it instead, or carry on importing the page.</p>
+          <p className="section-title" style={{ marginBottom: 4 }}>This {what}'s DOI belongs to an indexed paper</p>
+          <p className="hint" style={{ marginBottom: 8 }}>Its registry record is more reliable — open it instead, or carry on importing the {what}.</p>
           <ResultCard item={registered} onClick={() => navigate('/detail', { state: { trial: registered } })} />
         </div>
       )}
@@ -265,7 +297,7 @@ function savedTrial(paper) {
   return {
     id: paper.id,
     savedPaperId: paper.id,
-    pubmedId: null,
+    pubmedId: pubmedIdFromUrl(paper.url),
     title: paper.title,
     journal: paper.journal || '',
     pubdate: paper.year,
