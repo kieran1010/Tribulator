@@ -5,6 +5,7 @@ export const SETTINGS_KEYS = {
   SYNC_ENABLED: 'tribulator_sync_enabled',
   DRIVE_FILE_ID: 'tribulator_drive_file_id',
   LAST_SYNC: 'tribulator_last_sync',
+  BACKUP_SNOOZED_UNTIL: 'tribulator_backup_snoozed_until',
 };
 
 export function getSetting(key) {

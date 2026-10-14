@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { SETTINGS_KEYS, getSetting, setSetting } from '../lib/storage';
 import { exportLibraryToFile, importLibraryFromFile } from '../lib/backup';
 import { syncNow, getLastSync, isSyncConfigured } from '../lib/sync';
@@ -20,6 +20,8 @@ function formatWhen(iso) {
 
 export default function SettingsScreen() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const driveSectionRef = useRef(null);
   const [aiEnabled, setAiEnabled] = useState(false);
   const [apiKey, setApiKey] = useState('');
   const [saved, setSaved] = useState(false);
@@ -50,6 +52,13 @@ export default function SettingsScreen() {
     setSyncSectionOpen(savedSyncEnabled || !!getSetting(SETTINGS_KEYS.DRIVE_FILE_ID));
     setLastSync(getLastSync());
   }, []);
+
+  // Arriving from the backup reminder: bring the Drive section into view and
+  // briefly highlight it, so it's clear where to go next.
+  const highlightDrive = location.state?.focus === 'drive';
+  useEffect(() => {
+    if (highlightDrive) driveSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [highlightDrive]);
 
   const handleSyncNow = async () => {
     if (!isSyncConfigured()) {
@@ -219,9 +228,15 @@ export default function SettingsScreen() {
 
       <div className="divider" />
 
-      <p className="section-title" style={{ color: 'var(--navy)' }}>☁️ Google Drive sync</p>
+      <p
+        ref={driveSectionRef}
+        className="section-title"
+        style={{ color: 'var(--navy)', scrollMarginTop: 'calc(var(--header-h) + 16px)' }}
+      >
+        ☁️ Google Drive sync
+      </p>
 
-      <div className="card section switch-row">
+      <div className={'card section switch-row' + (highlightDrive ? ' highlight' : '')}>
         <div>
           <p className="section-title" style={{ marginBottom: 2 }}>Enable Google Drive sync</p>
           <p className="hint">Keep your library in step across devices</p>
