@@ -175,6 +175,21 @@ function scheduleAutoSync() {
 
 let started = false;
 
+// Settles once the launch sync has finished (or once it's clear there won't be
+// one), so anything judging how fresh the Drive copy is can wait for it rather
+// than reading a last-sync time that's about to be updated. Created up front so
+// callers can wait on it even before startAutoSync() runs — a screen's effects
+// run before App's own.
+let settleLaunchSync;
+const launchSyncSettled = new Promise(resolve => { settleLaunchSync = resolve; });
+
+// Resolves when the launch sync settles, or after `timeoutMs` regardless: Drive
+// requests have no timeout of their own, and a hung sync must not hold up
+// whoever is waiting indefinitely.
+export function whenLaunchSyncSettled({ timeoutMs = 30000 } = {}) {
+  return Promise.race([launchSyncSettled, new Promise(resolve => setTimeout(resolve, timeoutMs))]);
+}
+
 // A launch sync competing with the app's own first paint is the most jarring
 // moment for the Google flash to land in — the user hasn't seen the app yet,
 // so it reads as the screen opening to the wrong thing. Waiting a couple of
@@ -195,8 +210,14 @@ export function startAutoSync() {
     // Only if Google can issue a token without UI — an expired grant should
     // surface in Settings, not as a popup on launch.
     setTimeout(() => {
-      if (isSyncEnabled() && navigator.onLine) syncNow({ interactive: false }).catch(() => {});
+      if (isSyncEnabled() && navigator.onLine) {
+        syncNow({ interactive: false }).catch(() => {}).finally(settleLaunchSync);
+      } else {
+        settleLaunchSync();
+      }
     }, LAUNCH_SYNC_DELAY_MS);
+  } else {
+    settleLaunchSync();
   }
 }
 

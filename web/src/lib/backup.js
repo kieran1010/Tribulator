@@ -1,7 +1,42 @@
 import { SYNC_FIELDS, TAGS } from './constants';
 import { getAllPapers, addPaper, findMatchingPaper } from './db';
 import { toSyncDocument } from './merge';
-import { SETTINGS_KEYS, setSetting } from './storage';
+import { SETTINGS_KEYS, getSetting, setSetting } from './storage';
+import { getLastSync, isSyncConfigured, isSyncEnabled } from './sync';
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+// How old the newest backup may get before the reminder appears, and how long
+// "Not now" puts it off for.
+export const BACKUP_REMINDER_DAYS = 5;
+
+// Decides whether the backup reminder is due and what it should offer:
+// 'resync' when Drive sync is linked but hasn't completed recently, 'setup'
+// when Drive sync is available but not yet set up, or 'file' when this build
+// has no Drive sync at all. Returns null when no reminder is due.
+export function getBackupReminder() {
+  const snoozedUntil = getSetting(SETTINGS_KEYS.BACKUP_SNOOZED_UNTIL);
+  if (snoozedUntil && Date.now() < new Date(snoozedUntil).getTime()) return null;
+
+  // A Drive sync is a backup too, so a recent one counts — including a manual
+  // sync on a linked device with automatic sync switched off.
+  const driveLinked = isSyncConfigured() && (isSyncEnabled() || !!getSetting(SETTINGS_KEYS.DRIVE_FILE_ID));
+  const lastBackup = [getSetting(SETTINGS_KEYS.LAST_BACKUP), driveLinked ? getLastSync() : null]
+    .filter(Boolean)
+    .sort()
+    .pop() || null;
+  const daysSince = lastBackup ? (Date.now() - new Date(lastBackup).getTime()) / DAY_MS : Infinity;
+  if (daysSince <= BACKUP_REMINDER_DAYS) return null;
+
+  return {
+    daysSince: lastBackup ? Math.floor(daysSince) : null,
+    offer: driveLinked ? 'resync' : isSyncConfigured() ? 'setup' : 'file',
+  };
+}
+
+export function snoozeBackupReminder() {
+  setSetting(SETTINGS_KEYS.BACKUP_SNOOZED_UNTIL, new Date(Date.now() + BACKUP_REMINDER_DAYS * DAY_MS).toISOString());
+}
 
 export async function exportLibraryToFile() {
   const papers = await getAllPapers();

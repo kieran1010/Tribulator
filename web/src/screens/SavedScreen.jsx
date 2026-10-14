@@ -1,12 +1,13 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getAllPapers, deletePaper, pubmedIdFromUrl } from '../lib/db';
-import { exportLibraryToFile } from '../lib/backup';
-import { getLastSync, isSyncEnabled } from '../lib/sync';
-import { SETTINGS_KEYS, getSetting, isAiEnabled } from '../lib/storage';
+import { getBackupReminder } from '../lib/backup';
+import { whenLaunchSyncSettled } from '../lib/sync';
+import { isAiEnabled } from '../lib/storage';
 import { searchLibraryWithAI } from '../lib/aiApi';
 import { TAGS, PUBLICATION_TYPES } from '../lib/constants';
 import { SearchIcon, TrashIcon, BookmarkIcon, XIcon, SparklesIcon, ChevronDown } from '../components/Icon';
+import BackupPrompt from '../components/BackupPrompt';
 
 let hasPromptedBackupThisSession = false;
 
@@ -44,38 +45,27 @@ export default function SavedScreen() {
   const [aiResults, setAiResults] = useState(null);
   const [aiError, setAiError] = useState(null);
 
+  const [backupReminder, setBackupReminder] = useState(null);
+
   useEffect(() => {
+    let cancelled = false;
     (async () => {
       const all = await getAllPapers();
+      if (cancelled) return;
       setPapers(all);
       setLoading(false);
 
-      if (!hasPromptedBackupThisSession && all.length > 0) {
-        // A recent Drive sync is a backup, so don't also nag for a file one.
-        const lastSync = isSyncEnabled() ? getLastSync() : null;
-        const lastBackup = [getSetting(SETTINGS_KEYS.LAST_BACKUP), lastSync]
-          .filter(Boolean)
-          .sort()
-          .pop() || null;
-        const daysSince = lastBackup
-          ? (Date.now() - new Date(lastBackup).getTime()) / (1000 * 60 * 60 * 24)
-          : Infinity;
-        if (daysSince > 5) {
-          hasPromptedBackupThisSession = true;
-          const msg = lastBackup
-            ? `Your library was last backed up ${Math.floor(daysSince)} days ago. Back up now?`
-            : 'You have no backup on record. Back up your saved papers now?';
-          if (confirm(msg)) {
-            try {
-              const count = await exportLibraryToFile();
-              alert(`Exported ${count} paper${count !== 1 ? 's' : ''}.`);
-            } catch (e) {
-              alert('Backup failed: ' + e.message);
-            }
-          }
-        }
-      }
+      if (hasPromptedBackupThisSession || all.length === 0) return;
+      // The launch sync runs a few seconds after the app opens, so judging the
+      // backup before it finishes would warn about a sync that's moments away.
+      await whenLaunchSyncSettled();
+      if (cancelled || hasPromptedBackupThisSession) return;
+      const reminder = getBackupReminder();
+      if (!reminder) return;
+      hasPromptedBackupThisSession = true;
+      setBackupReminder(reminder);
     })();
+    return () => { cancelled = true; };
   }, []);
 
   const handleDelete = async id => {
@@ -217,6 +207,8 @@ export default function SavedScreen() {
 
   return (
     <div>
+      {backupReminder && <BackupPrompt reminder={backupReminder} onClose={() => setBackupReminder(null)} />}
+
       <div className="section" style={{ position: 'relative' }}>
         <SearchIcon width={16} height={16} style={{ position: 'absolute', left: 14, top: 14, color: 'var(--muted)' }} />
         <input
