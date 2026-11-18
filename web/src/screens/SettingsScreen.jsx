@@ -268,9 +268,8 @@ export default function SettingsScreen() {
       {showDriveNotice && !syncEnabled && !link.connecting && (
         <div className="card section">
           <p className="hint" style={{ marginTop: 0 }}>
-            Tribulator keeps a copy of your library in your Google Drive, in a single
-            <code> tribulator-library.json </code>
-            file. Google Drive access gives Tribulator access only to its own files, never to the rest of your data.
+            Tribulator keeps a copy of your library in your Google Drive. Google Drive access gives Tribulator
+            access only to its own files, never to the rest of your data.
           </p>
           <button
             type="button"
