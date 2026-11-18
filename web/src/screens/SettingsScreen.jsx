@@ -1,9 +1,13 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useReducer, useSyncExternalStore } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { SETTINGS_KEYS, getSetting, setSetting } from '../lib/storage';
 import { exportLibraryToFile, importLibraryFromFile } from '../lib/backup';
-import { syncNow, getLastSync, isSyncConfigured } from '../lib/sync';
-import { revokeToken } from '../lib/googleDrive';
+import { syncNow, getLastSync, isSyncConfigured, isSyncEnabled, connectDrive, onSyncStateChange } from '../lib/sync';
+import { disconnectDrive } from '../lib/googleDrive';
+import { subscribeDriveLink, getDriveLinkSnapshot, clearLinkOutcome } from '../lib/driveLink';
+
+// Remembers "Not now" on the Finish setup prompt (this device only).
+const FINISH_SETUP_DISMISSED_KEY = 'tribulator_drive_finish_setup_dismissed';
 import { buildLabel } from '../lib/build';
 import { CloudDownIcon, CloudUpIcon, CheckCircleIcon, SparklesIcon } from '../components/Icon';
 
@@ -30,12 +34,20 @@ export default function SettingsScreen() {
   const [notice, setNotice] = useState(null);
   const fileInputRef = useRef(null);
 
-  const [syncEnabled, setSyncEnabled] = useState(false);
-  // Whether the sync configuration is expanded. Purely a display state, kept
-  // separate from syncEnabled (the real on/off flag) — it just decides
-  // whether the sync controls are shown, the same way the
-  // AI section stays collapsed until "Enable AI features" is switched on.
-  const [syncSectionOpen, setSyncSectionOpen] = useState(false);
+  // Drive sync is one switch: on means connected and always automatic. It's
+  // read straight from storage; refresh() re-renders after changing it.
+  const [, refresh] = useReducer(n => n + 1, 0);
+  const syncEnabled = isSyncEnabled();
+  // This device's connection to the Hypnos sign-in server (lib/driveLink.js),
+  // including a connection Google has just returned from.
+  const link = useSyncExternalStore(subscribeDriveLink, getDriveLinkSnapshot);
+  const [showDriveNotice, setShowDriveNotice] = useState(false);
+  const [connectStarting, setConnectStarting] = useState(false);
+  const [finishSetupDismissed, setFinishSetupDismissed] = useState(
+    () => getSetting(FINISH_SETUP_DISMISSED_KEY) === '1'
+  );
+  // Switching sync on through the server didn't work: offer Google's pop-up.
+  const offerPopup = !!link.outcome && !link.outcome.ok && link.outcome.enableSync;
   const [syncing, setSyncing] = useState(false);
   const [syncStep, setSyncStep] = useState('');
   const [lastSync, setLastSync] = useState(null);
@@ -44,14 +56,13 @@ export default function SettingsScreen() {
   useEffect(() => {
     setAiEnabled(getSetting(SETTINGS_KEYS.AI_ENABLED) === 'true');
     setApiKey(getSetting(SETTINGS_KEYS.API_KEY) || '');
-    const savedSyncEnabled = getSetting(SETTINGS_KEYS.SYNC_ENABLED) === 'true';
-    setSyncEnabled(savedSyncEnabled);
-    // Already set up on this device — open expanded rather than hiding a
-    // working configuration behind a switch that reads as off. A linked Drive
-    // file counts even if auto-sync was switched off inside the panel.
-    setSyncSectionOpen(savedSyncEnabled || !!getSetting(SETTINGS_KEYS.DRIVE_FILE_ID));
     setLastSync(getLastSync());
   }, []);
+
+  // Keep "Last synced" current when an automatic sync finishes while Settings
+  // is open — e.g. the first sync just after connecting. (A connection's
+  // result message stays until the next Drive action here clears it.)
+  useEffect(() => onSyncStateChange(active => { if (!active) setLastSync(getLastSync()); }), []);
 
   // Arriving from the backup reminder: bring the Drive section into view and
   // briefly highlight it, so it's clear where to go next.
@@ -60,6 +71,8 @@ export default function SettingsScreen() {
     if (highlightDrive) driveSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }, [highlightDrive]);
 
+  // Also the fallback for switching sync on when connecting through the
+  // server didn't work: Google's own pop-up, as before.
   const handleSyncNow = async () => {
     if (!isSyncConfigured()) {
       setSyncNotice({ type: 'error', text: "Google Drive sync isn't set up in this version of Tribulator." });
@@ -72,9 +85,10 @@ export default function SettingsScreen() {
       const result = await syncNow({ interactive: true, onStep: setSyncStep });
       setLastSync(result.at);
       // Switching sync on only after the first success means auto-sync never
-      // runs against a client ID that has not been proven to work.
+      // runs against a setup that has not been proven to work.
       setSetting(SETTINGS_KEYS.SYNC_ENABLED, 'true');
-      setSyncEnabled(true);
+      clearLinkOutcome();
+      refresh();
       setSyncNotice({
         type: 'success',
         text: `Synced ${result.total} paper${result.total === 1 ? '' : 's'}` +
@@ -88,45 +102,42 @@ export default function SettingsScreen() {
     }
   };
 
+  // Leaves for Google's consent screen; the app comes back to Settings.
+  const handleConnect = async ({ enableSync }) => {
+    setConnectStarting(true);
+    setSyncNotice(null);
+    clearLinkOutcome();
+    try {
+      await connectDrive({ enableSync });
+    } catch (e) {
+      setSyncNotice({ type: 'error', text: e.message || "Couldn't connect to Google Drive." });
+      setConnectStarting(false);
+    }
+  };
+
   const handleDisconnect = async () => {
-    if (!confirm('Disconnect Google Drive? Your papers stay on this device and in Drive.')) return false;
-    await revokeToken();
+    if (!confirm('Switch off Google Drive sync? Your papers stay on this device and in Drive.')) return;
+    await disconnectDrive();
     setSetting(SETTINGS_KEYS.SYNC_ENABLED, 'false');
     setSetting(SETTINGS_KEYS.DRIVE_FILE_ID, '');
-    setSyncEnabled(false);
-    setSyncNotice({ type: 'success', text: 'Disconnected.' });
-    return true;
+    clearLinkOutcome();
+    refresh();
+    setSyncNotice({ type: 'success', text: 'Google Drive sync is off.' });
   };
 
-  const toggleSync = () => {
-    const next = !syncEnabled;
-    setSyncEnabled(next);
-    setSetting(SETTINGS_KEYS.SYNC_ENABLED, next ? 'true' : 'false');
-  };
-
-  // Collapsing the section while a real connection is live would hide it
-  // while it keeps syncing in the background, which reads as "off" when it
-  // isn't — so that case goes through the same disconnect flow as the
-  // explicit button instead of just hiding the panel.
-  const toggleSyncSection = async () => {
-    if (syncSectionOpen) {
-      // Still connected (auto-sync on, or a Drive file linked with auto-sync
-      // switched off) — closing must disconnect, or the panel would reopen
-      // next visit.
-      if (syncEnabled || getSetting(SETTINGS_KEYS.DRIVE_FILE_ID)) {
-        const disconnected = await handleDisconnect();
-        if (disconnected) setSyncSectionOpen(false);
-        return;
-      }
-      setSyncSectionOpen(false);
+  const toggleDriveSync = () => {
+    setSyncNotice(null);
+    if (syncEnabled) { handleDisconnect(); return; }
+    if (!isSyncConfigured()) {
+      setSyncNotice({ type: 'error', text: "Google Drive sync isn't set up in this version of Tribulator." });
       return;
     }
-    // Persist straight away: this switch is what the user sees as "on", so it
-    // must survive leaving Settings even if they never reach a successful sync.
-    // Auto-sync is silent and fails quietly, so an unproven setup does no harm.
-    setSetting(SETTINGS_KEYS.SYNC_ENABLED, 'true');
-    setSyncEnabled(true);
-    setSyncSectionOpen(true);
+    setShowDriveNotice(true);
+  };
+
+  const dismissFinishSetup = () => {
+    setSetting(FINISH_SETUP_DISMISSED_KEY, '1');
+    setFinishSetupDismissed(true);
   };
 
   const handleSave = () => {
@@ -243,67 +254,91 @@ export default function SettingsScreen() {
         </div>
         <button
           type="button"
-          className={'switch' + (syncSectionOpen ? ' on' : '')}
-          onClick={toggleSyncSection}
+          className={'switch' + (syncEnabled || link.connecting ? ' on' : '')}
+          onClick={toggleDriveSync}
+          disabled={link.connecting || connectStarting || syncing}
           aria-label="Enable Google Drive sync"
         >
           <span className="switch-knob" />
         </button>
       </div>
 
-      {syncSectionOpen && (
-        <>
-          <p className="hint section">
-            Keeps your library in step across devices through a single
+      {link.connecting && <p className="hint section">Connecting to Google Drive…</p>}
+
+      {showDriveNotice && !syncEnabled && !link.connecting && (
+        <div className="card section">
+          <p className="hint" style={{ marginTop: 0 }}>
+            Tribulator keeps a copy of your library in your Google Drive, in a single
             <code> tribulator-library.json </code>
-            file in your Drive. Tribulator can only see the file it created, never the rest of your Drive.
+            file. Google Drive access gives Tribulator access only to its own files, never to the rest of your data.
           </p>
+          <button
+            type="button"
+            className="btn btn-primary"
+            style={{ marginTop: 12 }}
+            onClick={() => handleConnect({ enableSync: true })}
+            disabled={connectStarting}
+          >
+            {connectStarting ? <span className="spinner" /> : <CloudUpIcon width={18} height={18} />}
+            Continue to Google
+          </button>
+          <button type="button" className="btn btn-ghost" onClick={() => setShowDriveNotice(false)} disabled={connectStarting}>
+            Cancel
+          </button>
+        </div>
+      )}
 
-          {!isSyncConfigured() && (
-            <p className="hint section">Google Drive sync isn't set up in this version of Tribulator.</p>
-          )}
+      {link.outcome && (
+        <p className={link.outcome.ok ? 'hint section' : 'error-text section'}>{link.outcome.message}</p>
+      )}
 
-          <div className="card section switch-row">
-            <div>
-              <p className="section-title" style={{ marginBottom: 2 }}>Sync automatically</p>
-              <p className="hint">On launch, and after each change to your library</p>
+      {offerPopup && !syncEnabled && (
+        <button type="button" className="btn btn-outline section" onClick={handleSyncNow} disabled={syncing}>
+          {syncing ? <span className="spinner" /> : null}
+          {syncing ? (syncStep || 'Syncing...') : "Use Google's pop-up instead"}
+        </button>
+      )}
+
+      {syncEnabled && (
+        <>
+          {!link.connected && !finishSetupDismissed && (
+            <div className="card section">
+              <p className="section-title" style={{ marginBottom: 2 }}>Sync without Google's pop-up</p>
+              <p className="hint">Connect this device once more, and Tribulator won't need Google's sign-in pop-up here again.</p>
+              <button
+                type="button"
+                className="btn btn-primary"
+                style={{ marginTop: 12 }}
+                onClick={() => handleConnect({ enableSync: false })}
+                disabled={connectStarting}
+              >
+                {connectStarting ? <span className="spinner" /> : null}
+                Finish setup
+              </button>
+              <button type="button" className="btn btn-ghost" onClick={dismissFinishSetup} disabled={connectStarting}>
+                Not now
+              </button>
             </div>
-            <button
-              type="button"
-              className={'switch' + (syncEnabled ? ' on' : '')}
-              onClick={toggleSync}
-              disabled={!isSyncConfigured()}
-
-              aria-label="Sync automatically"
-            >
-              <span className="switch-knob" />
-            </button>
-          </div>
+          )}
 
           <button
             type="button"
             className="btn btn-primary section"
             onClick={handleSyncNow}
-            disabled={syncing || !isSyncConfigured()}
+            disabled={syncing}
           >
             {syncing ? <span className="spinner" /> : <CloudUpIcon width={18} height={18} />}
             {syncing ? (syncStep || 'Syncing...') : 'Sync now'}
           </button>
 
           <p className="hint">Last synced {formatWhen(lastSync)}.</p>
-
-          {syncEnabled && (
-            <button type="button" className="btn btn-ghost" onClick={handleDisconnect}>
-              Disconnect Google Drive
-            </button>
-          )}
-
-          {syncNotice && (
-            <p className={syncNotice.type === 'error' ? 'error-text' : 'hint'} style={{ marginTop: 12 }}>
-              {syncNotice.text}
-            </p>
-          )}
         </>
+      )}
+
+      {syncNotice && (
+        <p className={syncNotice.type === 'error' ? 'error-text' : 'hint'} style={{ marginTop: 12 }}>
+          {syncNotice.text}
+        </p>
       )}
 
       <p className="build-stamp">{buildLabel()}</p>

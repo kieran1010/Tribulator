@@ -1,9 +1,11 @@
 import { getAllRecords, applyMergedRecords, purgeExpiredTombstones, onMutation } from './db';
 import { mergeLibraries, toSyncDocument, papersFromSyncDocument } from './merge';
 import { SETTINGS_KEYS, getSetting, setSetting, removeSetting } from './storage';
+import { startDriveConnection, finishDriveConnection } from './driveLink';
 import {
   normaliseClientId,
   getAccessToken,
+  cacheServerToken,
   hasLiveToken,
   findLibraryFile,
   getFileMetadata,
@@ -50,6 +52,13 @@ const BUILD_CLIENT_ID = normaliseClientId(import.meta.env?.VITE_GOOGLE_CLIENT_ID
 // Earlier versions let a client ID be pasted in Settings; drop any left behind.
 removeSetting('tribulator_google_client_id');
 
+// Sync is always automatic while it's on (there's no "Sync automatically"
+// switch any more). A device that had a Drive file linked with that switch off
+// is treated as on.
+if (getSetting(SETTINGS_KEYS.DRIVE_FILE_ID) && getSetting(SETTINGS_KEYS.SYNC_ENABLED) !== 'true') {
+  setSetting(SETTINGS_KEYS.SYNC_ENABLED, 'true');
+}
+
 export function getClientId() {
   return BUILD_CLIENT_ID;
 }
@@ -64,6 +73,23 @@ export function isSyncEnabled() {
 
 export function getLastSync() {
   return getSetting(SETTINGS_KEYS.LAST_SYNC);
+}
+
+// Connects this device to the Hypnos sign-in server (lib/driveLink.js): leaves
+// for Google's consent screen and comes back. With enableSync, Drive sync is
+// switched on only once that has worked (completeDriveConnection).
+export function connectDrive({ enableSync = false } = {}) {
+  return startDriveConnection(getClientId(), { enableSync });
+}
+
+// Call once at start-up, before startAutoSync: if this launch is Google's
+// return, finishes connecting this device so the launch sync already uses it.
+export async function completeDriveConnection() {
+  const result = await finishDriveConnection();
+  if (!result) return null;
+  if (result.accessToken) cacheServerToken(result.accessToken, result.expiresIn);
+  if (result.ok && result.enableSync) setSetting(SETTINGS_KEYS.SYNC_ENABLED, 'true');
+  return result;
 }
 
 async function resolveLibraryFile(token) {

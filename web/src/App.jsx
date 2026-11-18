@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { HashRouter, Routes, Route, Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { startAutoSync } from './lib/sync';
+import { startAutoSync, completeDriveConnection } from './lib/sync';
 import { DEFAULT_FILTERS } from './lib/constants';
 import { classifyQuery } from './lib/queryClassifier';
 import Header from './components/Header';
@@ -84,7 +84,11 @@ function Layout() {
 
 export default function App() {
   // Syncs on launch when Drive sync is switched on, then after every change.
-  useEffect(() => { startAutoSync(); }, []);
+  // A launch can be Google returning from connecting this device: that's
+  // finished first, so the launch sync already uses the new connection.
+  useEffect(() => {
+    completeDriveConnection().catch(() => {}).finally(() => startAutoSync());
+  }, []);
 
   return (
     <HashRouter>

@@ -3,6 +3,12 @@
 // to `drive.file` — it can only ever see files it created itself, never the
 // rest of the user's Drive. That scope is also classified non-sensitive, so the
 // OAuth client needs no Google verification review.
+//
+// A device connected to the Hypnos sign-in server (lib/driveLink.js) gets its
+// tokens from the server instead, with no Google window at all; Google's own
+// library below is then only the fallback for when the server can't help.
+import { getDeviceLink, fetchServerToken, unlinkDevice } from './driveLink';
+
 const GIS_SRC = 'https://accounts.google.com/gsi/client';
 const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
 const FILES_API = 'https://www.googleapis.com/drive/v3/files';
@@ -70,6 +76,34 @@ export function hasLiveToken() {
   return !!cachedToken && Date.now() < cachedExpiry;
 }
 
+function rememberToken(token, expiresInSeconds) {
+  cachedToken = token;
+  // Expire a minute early so a sync never starts on a token about to die.
+  cachedExpiry = Date.now() + (Number(expiresInSeconds) || 3600) * 1000 - 60_000;
+}
+
+/** Caches the first token the server hands back when this device connects. */
+export function cacheServerToken(token, expiresInSeconds) {
+  rememberToken(token, expiresInSeconds);
+}
+
+// Concurrent callers share one request: the server allows a device one token
+// request every few seconds.
+let serverAttempt = null;
+
+function serverToken() {
+  if (!serverAttempt) {
+    serverAttempt = fetchServerToken()
+      .then(result => {
+        if (result.kind !== 'token') return null;
+        rememberToken(result.accessToken, result.expiresIn);
+        return result.accessToken;
+      })
+      .finally(() => { serverAttempt = null; });
+  }
+  return serverAttempt;
+}
+
 // `interactive: false` asks Google for a token without showing UI, which works
 // when the user has already granted access in this browser. Automatic syncs use
 // it so they can fail quietly instead of throwing a popup at the user.
@@ -88,6 +122,13 @@ export async function getAccessToken(rawClientId, { interactive = true, timeoutM
   const clientId = normaliseClientId(rawClientId);
   if (hasLiveToken()) return cachedToken;
 
+  // A connected device asks the Hypnos server — no window. If it's no longer
+  // connected, or the server can't help right now, carry on the usual way.
+  if (getDeviceLink()) {
+    const fromServer = await serverToken();
+    if (fromServer) return fromServer;
+  }
+
   const attempt = (async () => {
     const google = await loadGis();
     return new Promise((resolve, reject) => {
@@ -99,9 +140,7 @@ export async function getAccessToken(rawClientId, { interactive = true, timeoutM
           if (!response?.access_token) {
             return reject(new Error(response?.error_description || response?.error || 'Authorisation failed'));
           }
-          cachedToken = response.access_token;
-          // Expire a minute early so a sync never starts on a token about to die.
-          cachedExpiry = Date.now() + (Number(response.expires_in) || 3600) * 1000 - 60_000;
+          rememberToken(response.access_token, response.expires_in);
           resolve(cachedToken);
         },
         error_callback: error => reject(new Error(error?.type === 'popup_closed'
@@ -133,16 +172,17 @@ export async function getAccessToken(rawClientId, { interactive = true, timeoutM
   }
 }
 
-export async function revokeToken() {
-  const token = cachedToken;
+// Disconnects this device from Google Drive: forgets its token and its
+// connection to the Hypnos sign-in server. Best effort.
+//
+// It deliberately does NOT revoke anything with Google. Revoking any one token
+// removes everything granted to the whole Google project — every token, on
+// every device, for every Hypnos app sharing it (Slate included). A forgotten
+// token expires within the hour; a forgotten server connection can't be used
+// again. To withdraw access everywhere, remove Hypnos from your Google Account.
+export async function disconnectDrive() {
   forgetToken();
-  if (!token) return;
-  try {
-    const google = await loadGis();
-    await new Promise(resolve => google.accounts.oauth2.revoke(token, resolve));
-  } catch {
-    // Revocation is best effort; the token expires within the hour regardless.
-  }
+  await unlinkDevice();
 }
 
 // Drive answers a refusal with a structured body, and the reason inside it is
